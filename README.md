@@ -421,6 +421,11 @@ Os testes cobrem as partes que mais importam:
 6. O arquivo [vercel.json](vercel.json) já agenda os dois crons diários: a restauração da conta
    demo e a busca de vagas. Como o `CRON_SECRET` está definido, a Vercel envia esse valor no
    cabeçalho e as rotas aceitam a chamada. O plano grátis da Vercel permite crons uma vez por dia.
+   O mesmo arquivo coloca o servidor em São Paulo (`gru1`), perto do banco do Supabase: se o seu
+   projeto do Supabase estiver em outra região, troque por uma próxima dele.
+7. No plano grátis, o Supabase **pausa o projeto depois de uma semana sem uso**. Os crons diários
+   (com a `SUPABASE_SECRET_KEY` configurada) e o script do Gmail mantêm o banco ativo. Se pausar,
+   reative em **Project → Restore** no painel do Supabase.
 
 > Variáveis `NEXT_PUBLIC_` são embutidas no build. Se mudar alguma depois, faça um novo deploy
 > (**Deployments → ⋯ → Redeploy**).
