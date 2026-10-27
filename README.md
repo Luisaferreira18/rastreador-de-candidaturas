@@ -1,12 +1,13 @@
 # Rastreador de candidaturas
 
+[![CI](https://github.com/Luisaferreira18/rastreador-de-candidaturas/actions/workflows/ci.yml/badge.svg)](https://github.com/Luisaferreira18/rastreador-de-candidaturas/actions/workflows/ci.yml)
+
 Sistema web para acompanhar candidaturas a vagas (estágio, trainee, CLT, PJ, temporário ou freela),
 do "quero me candidatar" até a proposta.
 Tem quadro Kanban com arrastar e soltar, linha do tempo de cada vaga, próximos passos com prazo e um
 painel com o funil e a taxa de resposta.
 
 > **Demonstração:** [rastreador-de-candidaturas.vercel.app](https://rastreador-de-candidaturas.vercel.app). Clique em **Explorar a demonstração**: a conta já vem com dados de exemplo, e eles voltam ao original todo dia.
-> _(troque o link pelo endereço do seu deploy)_
 
 ![Painel](docs/prints/painel.png)
 
@@ -113,8 +114,14 @@ ordem no funil e tipo. As mesmas chaves estão travadas no banco por restriçõe
   do mesmo usuário.
 - O servidor valida a sessão com `getClaims()` (confere a assinatura do token) e **toda Server
   Action revalida a entrada com Zod**, mesmo que o navegador já tenha validado.
-- A chave secreta do Supabase só é usada no servidor (cron e script da conta demo) e nunca tem o
-  prefixo `NEXT_PUBLIC_`.
+- A chave secreta do Supabase só é usada no servidor (crons, assistente do WhatsApp e script da
+  conta demo) e nunca tem o prefixo `NEXT_PUBLIC_`.
+- **A conta demo é protegida no próprio Auth**, não só na tela: um gatilho em `auth.users` recusa
+  trocar o e-mail dela e só aceita trocar a senha para a senha oficial, guardada criptografada no
+  **Vault** do Supabase. Assim, nem chamando `supabase.auth.updateUser()` direto pelo navegador um
+  visitante consegue tomar a conta. O Supabase não tem um Auth Hook que rode antes de alterar um
+  usuário, por isso a regra fica no banco. O cron de reset continua funcionando porque registra a
+  senha oficial (função `protect_demo_account`, só para a chave secreta) antes de redefini-la.
 - O CSV exportado neutraliza "injeção de fórmula" (`=`, `+`, `-`, `@` no início de um campo).
 - Os e-mails entram por uma função do banco (`inbox_ingest`) que só aceita um **token pessoal**:
   o banco guarda apenas o hash (SHA-256) dele e grava só na conta dona do token. O Supabase avisa
@@ -170,6 +177,8 @@ src/
 supabase/migrations/        SQL do banco (tabelas, trigger, RLS, índices)
 scripts/seed-demo.ts        Cria/recria a conta demo
 tests/                      Testes (Vitest)
+assets/fonts/               Fonte Geist (licença OFL) usada na imagem de compartilhamento
+.github/workflows/ci.yml    CI: lint, testes e build a cada push e pull request
 ```
 
 ## Configurar o Supabase
@@ -186,6 +195,7 @@ tests/                      Testes (Vitest)
    5. `20261020010100_inbox_ingest_anon_only.sql`
    6. `20261021000000_report_and_whatsapp.sql`
    7. `20261022000000_job_search.sql`
+   8. `20261027000000_protect_demo_account.sql`
 
    Confira em **Table Editor** se apareceram `applications`, `stage_history`, `tasks`,
    `inbox_items`, `user_settings`, `job_profiles` e `job_leads`, todas com o selo de RLS ativado.
@@ -234,6 +244,8 @@ tests/                      Testes (Vitest)
    o login da demo acontece no servidor.
 4. Em produção, o Cron da Vercel chama `/api/cron/reset-demo` todo dia às 3h (horário de Brasília)
    e restaura dados e senha. Dentro da conta demo também há um botão **Restaurar agora**.
+5. O script e o cron marcam a conta como protegida: o e-mail e a senha dela não mudam nem por
+   chamadas diretas ao Supabase (veja [Segurança](#segurança)).
 
 Qualquer outra conta pode carregar os mesmos dados de exemplo pelo botão **Carregar dados de
 exemplo**, que aparece quando a conta está vazia.
@@ -399,7 +411,14 @@ Os testes cobrem as partes que mais importam:
 - **Automação:** o leitor de mensagens (confirmação da Gupy e do LinkedIn, reprovação, teste,
   entrevistas, case, proposta, aprovação, mensagem colada do WhatsApp, alertas de vagas ignorados,
   datas), a escolha da candidatura e da etapa (nunca para trás) e a rota que recebe os e-mails.
+- **Conta demo protegida:** o reset (`ensureDemoUser` e a rota `/api/cron/reset-demo`) registra a
+  senha oficial antes de redefini-la, nasce protegida quando é criada e não segue adiante se a
+  proteção falhar. Com `SUPABASE_INTEGRATION=1 npm test`, um teste extra entra na demo de verdade
+  com a chave pública, como um visitante, e confere que `updateUser` não troca senha nem e-mail.
 - Formatação brasileira (datas, fuso de São Paulo, reais), CSV, filtros da lista e dados de exemplo.
+
+O [CI](.github/workflows/ci.yml) roda `npm ci`, lint, testes e build a cada push e pull request,
+com variáveis de ambiente falsas (o build não acessa o Supabase).
 
 ## Deploy na Vercel
 
@@ -439,3 +458,8 @@ Os testes cobrem as partes que mais importam:
   aparece na hora; os dados do usuário chegam por streaming, com esqueletos no lugar.
 - Ideias para o futuro: lembretes por e-mail dos prazos, anexos (currículo enviado para cada vaga),
   contatos de recrutadores e importação de vagas por link.
+
+## Licença
+
+[MIT](LICENSE). A fonte Geist, em [assets/fonts](assets/fonts), é distribuída pela Vercel sob a
+[SIL Open Font License](assets/fonts/OFL.txt).

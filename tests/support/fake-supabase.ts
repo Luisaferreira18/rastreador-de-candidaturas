@@ -4,7 +4,7 @@
  * a resposta configurada para aquela tabela + operação.
  */
 
-type Operation = "select" | "insert" | "update" | "delete";
+type Operation = "select" | "insert" | "upsert" | "update" | "delete";
 
 export type RecordedCall = {
   table: string;
@@ -42,6 +42,12 @@ export function createFakeSupabase(responses: Partial<Record<`${string}.${Operat
       },
       insert(payload: unknown) {
         Object.assign(call, { operation: "insert", payload });
+        started = true;
+        calls.push(call);
+        return builder;
+      },
+      upsert(payload: unknown) {
+        Object.assign(call, { operation: "upsert", payload });
         started = true;
         calls.push(call);
         return builder;

@@ -52,8 +52,19 @@ export async function clearUserData(supabase: Client, userId: string) {
 }
 
 /**
+ * Marca a conta como protegida no banco e guarda a senha oficial (no Vault).
+ * Um gatilho em auth.users recusa trocar o e-mail e aceita trocar a senha só
+ * para essa senha oficial: nem chamando o Supabase direto pelo navegador um
+ * visitante consegue tomar a conta demo.
+ */
+export async function protectDemoAccount(admin: Client, userId: string, password: string) {
+  const { error } = await admin.rpc("protect_demo_account", { p_user_id: userId, p_password: password });
+  if (error) throw error;
+}
+
+/**
  * Garante que a conta de demonstração existe, com e-mail confirmado e a senha
- * do .env (se alguém trocou a senha, ela volta ao normal). Requer o cliente admin.
+ * do .env, e que está protegida. Requer o cliente admin.
  */
 export async function ensureDemoUser(admin: Client, email: string, password: string): Promise<string> {
   const created = await admin.auth.admin.createUser({
@@ -62,7 +73,10 @@ export async function ensureDemoUser(admin: Client, email: string, password: str
     email_confirm: true,
     user_metadata: { full_name: "Conta de demonstração" },
   });
-  if (created.data.user) return created.data.user.id;
+  if (created.data.user) {
+    await protectDemoAccount(admin, created.data.user.id, password);
+    return created.data.user.id;
+  }
 
   const alreadyExists =
     created.error?.code === "email_exists" ||
@@ -75,6 +89,8 @@ export async function ensureDemoUser(admin: Client, email: string, password: str
     if (error) throw error;
     const user = data.users.find((candidate) => candidate.email?.toLowerCase() === email.toLowerCase());
     if (user) {
+      // Primeiro a senha oficial no banco: só ela passa pela proteção da conta.
+      await protectDemoAccount(admin, user.id, password);
       const updated = await admin.auth.admin.updateUserById(user.id, { password, email_confirm: true });
       if (updated.error) throw updated.error;
       return user.id;

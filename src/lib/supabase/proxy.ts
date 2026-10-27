@@ -14,6 +14,8 @@ const PUBLIC_PATHS = [
   "/api/report",
   "/api/whatsapp",
   "/manifest.webmanifest",
+  // Imagem de compartilhamento: WhatsApp, LinkedIn etc. buscam sem login.
+  "/opengraph-image",
 ];
 /** Páginas que um usuário logado não precisa ver. */
 const GUEST_ONLY_PATHS = ["/login", "/cadastro", "/recuperar-senha"];

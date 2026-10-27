@@ -356,6 +356,10 @@ export type Database = {
         Args: { p_token: string };
         Returns: Json;
       };
+      protect_demo_account: {
+        Args: { p_user_id: string; p_password: string };
+        Returns: undefined;
+      };
     };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };
