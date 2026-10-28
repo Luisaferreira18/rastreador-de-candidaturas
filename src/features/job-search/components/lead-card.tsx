@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check, ExternalLink, Loader2, Plus, Undo2, X } from "lucide-react";
+import { AlertTriangle, Check, Clock, ExternalLink, Gift, Loader2, Plus, Undo2, Wallet, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { CompanyAvatar } from "@/components/company-avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { diffDaysISO, formatDate, formatRelativeDay, timestampToISODate } from "@/lib/format";
+import { diffDaysISO, formatCurrency, formatDate, formatRelativeDay, timestampToISODate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { addLeadToBoard, dismissLead, restoreLead } from "../actions";
 import { scoreTone, type JobLead } from "../lead";
@@ -41,6 +41,48 @@ function publishedLabel(publishedAt: string | null, today: string): string | nul
   const age = diffDaysISO(day, today);
   if (age < 0) return null;
   return age <= 30 ? `publicada ${formatRelativeDay(day, today)}` : `publicada em ${formatDate(day)}`;
+}
+
+/** "Bolsa" para estágio, "Salário" para o resto. */
+function payLabel(jobType: JobLead["job_type"]): string {
+  if (jobType === "estagio") return "Bolsa de";
+  return jobType ? "Salário de" : "Remuneração de";
+}
+
+/** Bolsa, horário e benefícios, quando a vaga informa. */
+function LeadDetails({ lead }: { lead: JobLead }) {
+  if (lead.salary_cents === null && !lead.workload && lead.benefits.length === 0) return null;
+  return (
+    <div className="space-y-1 text-xs text-muted-foreground">
+      {(lead.salary_cents !== null || lead.workload) && (
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {lead.salary_cents !== null && (
+            <span className="inline-flex items-center gap-1">
+              <Wallet className="size-3.5 shrink-0" aria-hidden />
+              {payLabel(lead.job_type)}{" "}
+              <span className="font-medium text-foreground tabular-nums">{formatCurrency(lead.salary_cents)}</span>
+            </span>
+          )}
+          {lead.workload && (
+            <span className="inline-flex items-center gap-1">
+              <Clock className="size-3.5 shrink-0" aria-hidden />
+              <span className="sr-only">Horário: </span>
+              {lead.workload}
+            </span>
+          )}
+        </p>
+      )}
+      {lead.benefits.length > 0 && (
+        <p className="flex items-start gap-1">
+          <Gift className="mt-px size-3.5 shrink-0" aria-hidden />
+          <span className="line-clamp-2">
+            <span className="sr-only">Benefícios: </span>
+            {lead.benefits.join(" · ")}
+          </span>
+        </p>
+      )}
+    </div>
+  );
 }
 
 /** Uma vaga sugerida: por que combina e o que fazer com ela. */
@@ -117,6 +159,8 @@ export function LeadCard({ lead, today }: { lead: JobLead; today: string }) {
           </div>
           {meta && <p className="truncate text-xs text-muted-foreground">{meta}</p>}
         </div>
+
+        <LeadDetails lead={lead} />
 
         <ul className="flex flex-wrap gap-1.5" aria-label="Por que combina">
           {lead.reasons.map((reason) => (

@@ -8,7 +8,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { todayISO } from "@/lib/format";
 import type { Database, Json, Tables, TablesInsert } from "@/types/database";
 import { toSearchProfile } from "./profile";
-import { MAX_NEW_PER_RUN, buildSkipCheck, collectJobs, rankJobs, tasksForProfile, type JobCache } from "./search";
+import {
+  MAX_NEW_PER_RUN,
+  buildSkipCheck,
+  collectJobs,
+  completeJobs,
+  rankJobs,
+  tasksForProfile,
+  type JobCache,
+} from "./search";
 import { fetchJson as defaultFetchJson, type FetchJson } from "./sources/http";
 import type { SearchStats } from "./types";
 
@@ -42,21 +50,24 @@ export async function runSearchForUser(
   profileRow: Tables<"job_profiles">,
   options: { fetchJson?: FetchJson; cache?: JobCache; today?: string } = {},
 ): Promise<SearchStats> {
-  const profile = toSearchProfile(profileRow);
   const today = options.today ?? todayISO();
 
-  const [existing, applications] = await Promise.all([
+  const [existing, applications, resume] = await Promise.all([
     supabase.from("job_leads").select("source, external_id").eq("user_id", userId).limit(20_000),
     supabase.from("applications").select("company, role_title, job_url").eq("user_id", userId),
+    supabase.from("resumes").select("skills, languages").eq("user_id", userId).maybeSingle(),
   ]);
   if (existing.error) throw existing.error;
   if (applications.error) throw applications.error;
+  if (resume.error) throw resume.error;
+  const profile = toSearchProfile(profileRow, resume.data);
 
   const tasks = tasksForProfile(profile);
-  const { jobs, errors } = await collectJobs(tasks, options.fetchJson ?? defaultFetchJson, options.cache);
+  const fetchJson = options.fetchJson ?? defaultFetchJson;
+  const { jobs, errors } = await collectJobs(tasks, fetchJson, options.cache);
   const ranked = rankJobs(jobs, profile, today);
   const skip = buildSkipCheck(existing.data ?? [], applications.data ?? []);
-  const fresh = ranked.filter((job) => !skip(job)).slice(0, MAX_NEW_PER_RUN);
+  const fresh = await completeJobs(ranked.filter((job) => !skip(job)).slice(0, MAX_NEW_PER_RUN), profile, today, fetchJson);
 
   let added = 0;
   if (fresh.length > 0) {
@@ -71,6 +82,8 @@ export async function runSearchForUser(
       work_model: job.workModel,
       job_type: job.jobType,
       salary_cents: job.salaryCents,
+      benefits: job.benefits,
+      workload: job.workload,
       published_at: job.publishedAt,
       deadline: job.deadline,
       score: job.score,

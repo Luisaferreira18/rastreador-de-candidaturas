@@ -42,7 +42,11 @@ back-end, banco relacional com regras de segurança por usuário, login, testes 
   remuneração mínima, palavras-chave do currículo) e todo dia o app busca vagas abertas na Gupy e
   nas páginas de carreira de empresas (Greenhouse e Lever). Cada vaga ganha uma **nota de
   compatibilidade com os motivos** ("92%: Cargo: Estágio em Dados · Estágio · Híbrido em São Paulo
-  · SQL, Python") e entra no quadro com um clique. Veja [Caça-vagas](#caça-vagas).
+  · SQL, Python") e entra no quadro com um clique. O cartão mostra também **bolsa ou salário,
+  horário e benefícios** quando a vaga informa. Veja [Caça-vagas](#caça-vagas).
+- **Currículo em PDF:** o app lê as habilidades, os idiomas, o curso e a cidade, usa as
+  habilidades na nota das vagas, avisa quando a vaga pede um idioma acima do que o currículo diz e
+  sugere cargos e tipo de vaga para o perfil. Veja [Currículo](#currículo).
 - **Painel** com total, em andamento, taxa de resposta, aprovações, funil, aprovação por etapa,
   candidaturas por plataforma, ritmo semanal e **próximos prazos** (atrasados, hoje e próximos 7 dias).
 - **Exportar tudo em CSV**, pronto para abrir no Excel em português.
@@ -86,6 +90,7 @@ auth.users ──┬──< applications ──┬──< stage_history   (preen
              ├──  user_settings                        (token do e-mail e automação)
              ├──  job_profiles                         (perfil do caça-vagas)
              ├──< job_leads                            (vagas sugeridas, com nota)
+             ├──  resumes                              (o que foi lido do currículo)
              └── (user_id em todas as tabelas, para o RLS)
 ```
 
@@ -101,8 +106,11 @@ auth.users ──┬──< applications ──┬──< stage_history   (preen
 - **user_settings**: hash do token pessoal do e-mail e a preferência de aplicar sozinho.
 - **job_profiles**: o que a pessoa procura (cargos, tipos, modelos, cidade, palavras-chave, fontes)
   e o resumo da última busca.
-- **job_leads**: vagas encontradas, com nota, motivos e situação (nova, adicionada ao quadro ou
-  descartada). A mesma vaga nunca é sugerida duas vezes, nem depois de descartada.
+- **job_leads**: vagas encontradas, com nota, motivos, avisos, bolsa ou salário, horário,
+  benefícios e situação (nova, adicionada ao quadro ou descartada). A mesma vaga nunca é sugerida
+  duas vezes, nem depois de descartada.
+- **resumes**: um por pessoa. Guarda onde está o PDF e só o que a busca usa (habilidades, idiomas,
+  curso, situação do curso, cidade e sugestões). O texto completo do currículo não é guardado.
 
 As etapas são fixas e definidas em um só lugar ([src/lib/stages.ts](src/lib/stages.ts)): nome, cor,
 ordem no funil e tipo. As mesmas chaves estão travadas no banco por restrições `CHECK`.
@@ -122,6 +130,11 @@ ordem no funil e tipo. As mesmas chaves estão travadas no banco por restriçõe
   visitante consegue tomar a conta. O Supabase não tem um Auth Hook que rode antes de alterar um
   usuário, por isso a regra fica no banco. O cron de reset continua funcionando porque registra a
   senha oficial (função `protect_demo_account`, só para a chave secreta) antes de redefini-la.
+- **Currículos em bucket privado** do Storage, só PDF e até 4 MB, cada pessoa na própria pasta
+  (`<user_id>/curriculo.pdf`). O servidor confere a assinatura do arquivo (`%PDF-`), não só o tipo
+  informado pelo navegador, e o PDF só abre por um link temporário de 1 minuto. Na conta demo,
+  enviar e apagar currículo é recusado pelas próprias regras do banco e do Storage (uma função em
+  `private`, fora da API, diz se a conta é protegida), porque a conta é compartilhada.
 - O CSV exportado neutraliza "injeção de fórmula" (`=`, `+`, `-`, `@` no início de um campo).
 - Os e-mails entram por uma função do banco (`inbox_ingest`) que só aceita um **token pessoal**:
   o banco guarda apenas o hash (SHA-256) dele e grava só na conta dona do token. O Supabase avisa
@@ -170,7 +183,8 @@ src/
     inbox/                  leitor de mensagens (regras), plano de cada sugestão, script do Google
     report/                 montagem do resumo diário (e-mail, WhatsApp e prévia)
     whatsapp/               assistente: comandos, vinculação por código, webhook
-    job-search/             caça-vagas: fontes (Gupy, Greenhouse, Lever), nota de compatibilidade, busca
+    job-search/             caça-vagas: fontes (Gupy, Greenhouse, Lever), nota, bolsa e benefícios, busca
+    resume/                 currículo: leitura do PDF, habilidades, idiomas, curso, sugestões
   components/               Componentes compartilhados (app-shell, ui do shadcn, etc.)
   lib/                      Supabase, etapas, opções, formatação pt-BR, CSV, erros
   types/database.ts         Tipos do banco
@@ -178,6 +192,7 @@ supabase/migrations/        SQL do banco (tabelas, trigger, RLS, índices)
 scripts/seed-demo.ts        Cria/recria a conta demo
 tests/                      Testes (Vitest)
 assets/fonts/               Fonte Geist (licença OFL) usada na imagem de compartilhamento
+assets/demo/                Currículo fictício da conta demo (também usado nos testes)
 .github/workflows/ci.yml    CI: lint, testes e build a cada push e pull request
 ```
 
@@ -196,6 +211,8 @@ assets/fonts/               Fonte Geist (licença OFL) usada na imagem de compar
    6. `20261021000000_report_and_whatsapp.sql`
    7. `20261022000000_job_search.sql`
    8. `20261027000000_protect_demo_account.sql`
+   9. `20261028000000_job_lead_details.sql`
+   10. `20261028010000_resumes.sql` (cria também o bucket `curriculos` do Storage)
 
    Confira em **Table Editor** se apareceram `applications`, `stage_history`, `tasks`,
    `inbox_items`, `user_settings`, `job_profiles` e `job_leads`, todas com o selo de RLS ativado.
@@ -246,6 +263,9 @@ assets/fonts/               Fonte Geist (licença OFL) usada na imagem de compar
    e restaura dados e senha. Dentro da conta demo também há um botão **Restaurar agora**.
 5. O script e o cron marcam a conta como protegida: o e-mail e a senha dela não mudam nem por
    chamadas diretas ao Supabase (veja [Segurança](#segurança)).
+6. O script e o cron também colocam na demo um currículo fictício
+   ([assets/demo/curriculo-demo.pdf](assets/demo/curriculo-demo.pdf)), lido como qualquer currículo
+   enviado. Os visitantes não conseguem trocar nem apagar esse currículo.
 
 Qualquer outra conta pode carregar os mesmos dados de exemplo pelo botão **Carregar dados de
 exemplo**, que aparece quando a conta está vazia.
@@ -349,13 +369,26 @@ A pessoa pode acrescentar outras empresas colando o link da página de vagas
 fora: não têm listagem pública e proíbem a coleta automática.
 
 **Nota de compatibilidade** (regras em [src/features/job-search/score.ts](src/features/job-search/score.ts),
-sem IA): cargo 45 pontos, tipo de vaga 20, local e modelo 20, palavras-chave do currículo 15. O
+sem IA): cargo 45 pontos, tipo de vaga 20, local e modelo 20, palavras-chave e habilidades do
+currículo 15. O
 cargo é comparado sem acentos e com sinônimos em português e inglês ("Dados" = "Data",
 "Desenvolvedor" = "Developer"). Cada ponto vira um motivo na tela. Ficam de fora, em vez de ganhar
 nota baixa: outro tipo de vaga, nível sênior ou de liderança (quando o cargo do perfil não pede),
 outra cidade em vaga presencial ou híbrida, vaga fora do Brasil, inscrições encerradas, banco de
 talentos, jovem aprendiz e títulos com palavras a evitar. Remuneração abaixo do mínimo vira aviso e
 desconta pontos. Só entram vagas com nota a partir de 60, no máximo 30 novas por busca.
+
+**Bolsa, horário e benefícios** (regras em
+[src/features/job-search/details.ts](src/features/job-search/details.ts)): nenhuma fonte informa
+isso de forma organizada, então o app lê a descrição da vaga. Pega o valor só perto de "bolsa",
+"salário" ou "remuneração" (e ignora "bolsa de estudos", "bolsa de valores", valor por hora e
+"R$ 10 milhões"), a jornada ("6h por dia", "30h por semana", "das 9h às 15h") e 20 benefícios
+comuns (vale-transporte, vale-refeição, plano de saúde, Wellhub/Gympass, auxílio home office, PLR,
+day off...). Os benefícios só são lidos a partir da parte de benefícios da vaga, para não confundir
+com a apresentação da empresa ("somos líderes em plano de saúde"). Na dúvida, a informação fica de
+fora. A Gupy já manda a descrição completa na busca. O Greenhouse não: a lista com todas as
+descrições pesa megabytes por empresa, então o app baixa a descrição (cerca de 17 KB) só das vagas
+que já passaram no filtro e refaz a nota com ela.
 
 **Quando roda:**
 - **Todo dia cedo**, pelo Cron da Vercel (`/api/cron/vagas`, às 5h de Brasília), para todos os
@@ -368,6 +401,37 @@ As vagas novas aparecem no menu (com o número), na página **Vagas sugeridas**,
 por e-mail** e no comando `vagas` do assistente do WhatsApp. **Adicionar ao quadro** cria a
 candidatura em "Quero me candidatar" com empresa, cargo, link, local, modelo, tipo e a nota.
 **Descartar** tira a vaga da lista para sempre (com desfazer).
+
+## Currículo
+
+No **Perfil de busca**, a pessoa envia o currículo em PDF (até 4 MB). O texto sai do PDF com a
+biblioteca [unpdf](https://github.com/unjs/unpdf) (o pdf.js da Mozilla, sem dependências
+nativas) e é lido por regras, sem IA
+([src/features/resume/extract.ts](src/features/resume/extract.ts)):
+
+- **Habilidades:** um dicionário com mais de 100 ferramentas e conhecimentos, com os outros jeitos
+  de escrever ("MS Excel", "PostgreSQL" vale SQL, "PowerBI"). Só palavras inteiras: "excelente" não
+  é Excel e "JavaScript" não é Java.
+- **Idiomas e nível** ("Inglês: avançado", "English (B2)").
+- **Curso e situação:** procurado na parte de formação ("Formação acadêmica", "Escolaridade") ou
+  depois de "graduação em", "bacharelado em"... Datas futuras e palavras como "cursando" ou
+  "previsão" dizem que o curso está em andamento.
+- **Cidade e estado**, só no começo do currículo, onde ficam os dados de contato.
+
+Com isso, o app sugere **cargos** (do curso e das áreas com mais habilidades: "Estágio em Dados"),
+**tipos de vaga** (estágio para quem estuda; trainee para quem se forma em até um ano ou se formou
+há até dois) e a **cidade**. Nada muda sozinho: a pessoa marca o que quer, clica em **Usar no
+perfil**, confere e salva.
+
+Nas buscas, as habilidades do currículo **somam com as palavras-chave** do perfil na nota e
+aparecem como motivo ("Do currículo: Pandas"). Quando a vaga pede inglês ou espanhol avançado e o
+currículo diz menos (ou não cita o idioma), a vaga ganha um aviso ("Inglês avançado: seu currículo
+diz intermediário"). Enviar, trocar ou apagar o currículo libera uma busca nova.
+
+**Privacidade:** nome, e-mail, telefone, endereço e documentos não são lidos nem guardados. O PDF
+fica no bucket privado e pode ser apagado a qualquer momento, junto com o que foi lido dele. PDF
+escaneado (só imagem) não tem texto: o app avisa e pede para exportar de novo pelo Word ou pelo
+Google Docs.
 
 ## Rodar localmente
 
@@ -407,13 +471,18 @@ Os testes cobrem as partes que mais importam:
   empresas, estados e cidades, tipo e nível pelo título ("Internal Audit" não é estágio), a nota e
   cada motivo para deixar uma vaga de fora, a busca com fonte fora do ar, o reaproveitamento dos
   downloads no cron, vagas já sugeridas ou já no quadro, o perfil e a candidatura criada a partir da
-  vaga.
+  vaga. Bolsa, horário e benefícios, inclusive os falsos positivos ("bolsa de valores", "de 1 a 3
+  anos", plano de saúde na apresentação da empresa), e a descrição do Greenhouse baixada depois.
+- **Currículo:** o PDF de exemplo lido de ponta a ponta, habilidades, idiomas, curso e situação,
+  cidade, o que não é guardado (nome, e-mail, telefone), a nota com as habilidades, os avisos de
+  idioma, e a rota `/api/curriculo` (grava na pasta da pessoa, recusa arquivo que não é PDF e a
+  conta demo).
 - **Automação:** o leitor de mensagens (confirmação da Gupy e do LinkedIn, reprovação, teste,
   entrevistas, case, proposta, aprovação, mensagem colada do WhatsApp, alertas de vagas ignorados,
   datas), a escolha da candidatura e da etapa (nunca para trás) e a rota que recebe os e-mails.
 - **Conta demo protegida:** o reset (`ensureDemoUser` e a rota `/api/cron/reset-demo`) registra a
-  senha oficial antes de redefini-la, nasce protegida quando é criada e não segue adiante se a
-  proteção falhar. Com `SUPABASE_INTEGRATION=1 npm test`, um teste extra entra na demo de verdade
+  senha oficial antes de redefini-la, nasce protegida quando é criada, não segue adiante se a
+  proteção falhar e recoloca o currículo fictício. Com `SUPABASE_INTEGRATION=1 npm test`, um teste extra entra na demo de verdade
   com a chave pública, como um visitante, e confere que `updateUser` não troca senha nem e-mail.
 - Formatação brasileira (datas, fuso de São Paulo, reais), CSV, filtros da lista e dados de exemplo.
 
@@ -456,8 +525,12 @@ com variáveis de ambiente falsas (o build não acessa o Supabase).
   as métricas continuariam usando.
 - **Cache Components (Next.js 16):** a moldura das páginas (menu, títulos) é pré-renderizada e
   aparece na hora; os dados do usuário chegam por streaming, com esqueletos no lugar.
-- Ideias para o futuro: lembretes por e-mail dos prazos, anexos (currículo enviado para cada vaga),
-  contatos de recrutadores e importação de vagas por link.
+- **Currículo lido por regras, sem IA:** grátis, explicável e funciona na demo e no CI sem nenhuma
+  chave. Uma IA entenderia currículos mais variados, mas precisaria de uma chave paga e mandaria o
+  texto do currículo para fora. A leitura fica numa função só (`extractResume`), fácil de trocar.
+- Ideias para o futuro: lembretes por e-mail dos prazos, guardar qual versão do currículo foi
+  enviada para cada vaga, currículo em Word (.docx), contatos de recrutadores e importação de vagas
+  por link.
 
 ## Licença
 

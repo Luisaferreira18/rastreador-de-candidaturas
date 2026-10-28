@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import { FormSkeleton } from "@/features/applications/components/form-skeleton";
 import { JobProfileForm } from "@/features/job-search/components/job-profile-form";
 import { emptyJobProfileFormValues, toJobProfileFormValues } from "@/features/job-search/profile";
+import { requireUser } from "@/features/auth/session";
 import { getJobProfile } from "@/features/job-search/queries";
+import { getResume } from "@/features/resume/queries";
 
 export const metadata: Metadata = { title: "Perfil de busca" };
 
@@ -21,7 +23,7 @@ export default function JobProfilePage() {
       </Button>
       <PageHeader
         title="Perfil de busca"
-        description="O que você procura. A busca usa só estas informações e fontes públicas de vagas, sem login em nenhum site."
+        description="O que você procura. A busca usa este perfil, o seu currículo (se enviar) e fontes públicas de vagas, sem login em nenhum site."
         className="mb-8"
       />
       <Suspense fallback={<FormSkeleton />}>
@@ -32,11 +34,13 @@ export default function JobProfilePage() {
 }
 
 async function ProfileForm() {
-  const profile = await getJobProfile();
+  const [user, profile, resume] = await Promise.all([requireUser(), getJobProfile(), getResume()]);
   return (
     <JobProfileForm
       isNew={!profile}
       defaultValues={profile ? toJobProfileFormValues(profile) : emptyJobProfileFormValues}
+      resume={resume}
+      isDemo={user.isDemo}
     />
   );
 }

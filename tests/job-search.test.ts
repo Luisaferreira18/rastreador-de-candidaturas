@@ -2,15 +2,16 @@ import { describe, expect, it, vi } from "vitest";
 import { COMPANY_BOARDS, boardKey, parseBoardInput } from "@/features/job-search/boards";
 import { findUFs, findUFsInTitle, isBrazilLocation, toUF } from "@/features/job-search/brazil";
 import { detectJobType, detectSeniority, detectWorkModel } from "@/features/job-search/classify";
+import { extractJobDetails, htmlToText } from "@/features/job-search/details";
 import { leadToApplication, type JobLead } from "@/features/job-search/lead";
 import { emptyJobProfileFormValues, jobProfileFormSchema, toJobProfilePayload } from "@/features/job-search/profile";
 import { runSearchForUser } from "@/features/job-search/run";
-import { MIN_SCORE, roleMatch, scoreJob } from "@/features/job-search/score";
-import { buildSkipCheck, collectJobs, rankJobs, tasksForProfile, urlKey } from "@/features/job-search/search";
-import { normalizeGreenhouseJob, normalizeLeverPosting } from "@/features/job-search/sources/boards";
+import { MIN_SCORE, languageWarnings, roleMatch, scoreJob } from "@/features/job-search/score";
+import { buildSkipCheck, collectJobs, completeJobs, rankJobs, tasksForProfile, urlKey } from "@/features/job-search/search";
+import { normalizeGreenhouseJob, normalizeLeverPosting, withGreenhouseDetail } from "@/features/job-search/sources/boards";
 import { gupyCompanyName, gupyQueryUrls, normalizeGupyJob, parseGupyResponse } from "@/features/job-search/sources/gupy";
 import { SourceError } from "@/features/job-search/sources/http";
-import { coreTerms, searchTerms } from "@/features/job-search/text";
+import { coreTerms, fold, searchTerms } from "@/features/job-search/text";
 import type { ScrapedJob, SearchProfile } from "@/features/job-search/types";
 import { formatCurrency } from "@/lib/format";
 import type { Tables } from "@/types/database";
@@ -29,6 +30,8 @@ const profile: SearchProfile = {
   useGupy: true,
   useCompanyBoards: true,
   extraBoards: [],
+  resumeSkills: [],
+  resumeLanguages: null,
 };
 
 /** Formato real da busca pública da Gupy (out/2026). */
@@ -63,6 +66,9 @@ function job(overrides: Partial<ScrapedJob> = {}): ScrapedJob {
     salaryCents: null,
     publishedAt: "2026-10-18T12:00:00Z",
     deadline: null,
+    benefits: [],
+    workload: null,
+    detailUrl: null,
     text: "",
     ...overrides,
   };
@@ -151,6 +157,20 @@ describe("Gupy", () => {
     expect(gupyCompanyName("Venha construir o futuro com a gente!", "https://vagas-mrveco.gupy.io/job/1")).toBe("Mrveco");
   });
 
+  it("tira bolsa, horário e benefícios da descrição, que vem com os itens grudados", () => {
+    const result = normalizeGupyJob({
+      ...gupyJob,
+      description:
+        "Você vai trabalhar com SQL.Informações adicionaisHorário: De segunda a sexta de 07:00 às 13:00hsBolsa: R$1.000,00Benefícios: Vale-transporte; Auxílio lanche; Seguro de vida.",
+    });
+    expect(result).toMatchObject({
+      salaryCents: 100_000,
+      workload: "Das 7h às 13h",
+      benefits: ["Vale-transporte", "Vale-refeição", "Seguro de vida"],
+      detailUrl: null,
+    });
+  });
+
   it("banco de talentos e jovem aprendiz ficam marcados como outro tipo", () => {
     expect(normalizeGupyJob({ ...gupyJob, type: "vacancy_type_talent_pool" })?.otherType).toBe("Banco de talentos");
     expect(normalizeGupyJob({ ...gupyJob, type: "vacancy_type_apprentice" })?.otherType).toBe("Jovem aprendiz");
@@ -192,7 +212,33 @@ describe("Greenhouse e Lever", () => {
       },
       stone,
     );
-    expect(result).toMatchObject({ company: "Stone", jobType: "estagio", workModel: "hibrido", externalId: "8007019003" });
+    expect(result).toMatchObject({
+      company: "Stone",
+      jobType: "estagio",
+      workModel: "hibrido",
+      externalId: "8007019003",
+      text: "",
+      detailUrl: "https://boards-api.greenhouse.io/v1/boards/stone/jobs/8007019003",
+    });
+  });
+
+  it("Greenhouse: a descrição vem à parte, em HTML escapado", () => {
+    const base = normalizeGreenhouseJob(
+      { id: 1, title: "Estágio em Dados", absolute_url: "https://job-boards.greenhouse.io/stone/jobs/1" },
+      stone,
+    )!;
+    const detailed = withGreenhouseDetail(base, {
+      content:
+        "&lt;p&gt;SQL e Python.&lt;/p&gt;&lt;h3&gt;Benefícios&lt;/h3&gt;&lt;ul&gt;&lt;li&gt;Gympass&lt;/li&gt;&lt;li&gt;Plano de Saúde e Odontológico&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;Bolsa-auxílio: R$ 2.000,00&lt;/p&gt;",
+    });
+    expect(detailed).toMatchObject({
+      text: expect.stringContaining("SQL e Python."),
+      salaryCents: 200_000,
+      benefits: ["Plano de saúde", "Plano odontológico", "Academia"],
+      detailUrl: null,
+    });
+    expect(detailed.text).not.toContain("<");
+    expect(() => withGreenhouseDetail(base, { error: "not found" })).toThrow(SourceError);
   });
 
   it("Lever: modelo, país e salário em reais por mês", () => {
@@ -206,6 +252,7 @@ describe("Greenhouse e Lever", () => {
         workplaceType: "remote",
         categories: { commitment: "Estágio", location: "Brazil", department: "Dados" },
         descriptionPlain: "SQL e Python no dia a dia.",
+        additionalPlain: "Benefícios:\n• Assistência médica e odontológica\n• Gympass",
         salaryRange: { currency: "BRL", interval: "per-month-salary", min: 2200, max: 2500 },
       },
       { source: "lever", slug: "ciandt", company: "CI&T" },
@@ -217,6 +264,7 @@ describe("Greenhouse e Lever", () => {
       country: "BR",
       salaryCents: 220_000,
       publishedAt: "2026-10-18T00:00:00.000Z",
+      benefits: ["Plano de saúde", "Plano odontológico", "Academia"],
     });
     expect(result?.text).toContain("SQL e Python");
   });
@@ -232,6 +280,58 @@ describe("Greenhouse e Lever", () => {
   });
 });
 
+describe("bolsa, benefícios e horário", () => {
+  it("acha bolsa, salário e o menor valor de uma faixa", () => {
+    expect(extractJobDetails("Bolsa-auxílio de R$ 1.800 + VT").salaryCents).toBe(180_000);
+    expect(extractJobDetails("Salário: R$ 3.500,50 a R$ 4.000,00").salaryCents).toBe(350_050);
+    expect(extractJobDetails("Remuneração mensal: R$ 2.000").salaryCents).toBe(200_000);
+  });
+
+  it("não confunde com outros valores", () => {
+    const salary = (text: string) => extractJobDetails(text).salaryCents;
+    expect(salary("A B3, bolsa de valores do Brasil, movimenta R$ 10 milhões por dia.")).toBeNull();
+    expect(salary("Oferecemos bolsa de estudos de R$ 500 em cursos de idiomas.")).toBeNull();
+    expect(salary("Bolsa: R$ 25,00 por hora.")).toBeNull();
+    expect(salary("Salário compatível com o mercado. Faturamos R$ 3.000 por cliente.")).toBeNull();
+    expect(salary("Bolsa: a combinar.")).toBeNull();
+  });
+
+  it("acha a jornada em vários formatos", () => {
+    const workload = (text: string) => extractJobDetails(text).workload;
+    expect(workload("Estágio de 6 horas diárias.")).toBe("6h por dia");
+    expect(workload("Carga horária: 30 horas semanais")).toBe("30h por semana");
+    expect(workload("Carga horária de 6h")).toBe("6h por dia");
+    expect(workload("De segunda a sexta, das 9h às 15h30.")).toBe("Das 9h às 15h30");
+    expect(workload("Experiência de 1 a 3 anos.")).toBeNull();
+    expect(workload("Entrevista de 1h a 2h de duração.")).toBeNull();
+    expect(workload("Atendimento 24 horas por dia.")).toBeNull();
+  });
+
+  it("só lê benefícios a partir da parte de benefícios", () => {
+    const benefits = (text: string) => extractJobDetails(text).benefits;
+    expect(benefits("Somos líderes em plano de saúde no Brasil. Requisitos: Excel.")).toEqual([]);
+    expect(benefits("Somos líderes em plano de saúde. Benefícios: Seguro de vida")).toEqual(["Seguro de vida"]);
+    expect(benefits("Benefícios: VT, VR e VA; Wellhub; PLR")).toEqual([
+      "Vale-transporte",
+      "Vale-refeição",
+      "Vale-alimentação",
+      "Academia",
+      "PLR",
+    ]);
+    // Sigla só em maiúsculas: "vá" não é vale-alimentação.
+    expect(benefits("Benefícios: vá além com a gente")).toEqual([]);
+    expect(
+      benefits("O que oferecemos: Assistência Médica para você e dependentesAssistência OdontológicaDay off no aniversário"),
+    ).toEqual(["Plano de saúde", "Plano odontológico", "Day off"]);
+  });
+
+  it("converte o HTML escapado do Greenhouse", () => {
+    expect(htmlToText("&lt;p&gt;Olá &amp;amp; bem-vindo&lt;/p&gt;&lt;ul&gt;&lt;li&gt;VT&lt;/li&gt;&lt;/ul&gt;")).toBe(
+      "Olá & bem-vindo VT",
+    );
+  });
+});
+
 describe("nota de compatibilidade", () => {
   it("vaga ideal: nota alta e os motivos em ordem", () => {
     const match = scoreJob(
@@ -242,7 +342,7 @@ describe("nota de compatibilidade", () => {
     expect(match).toEqual({
       excluded: false,
       score: 100,
-      reasons: ["Cargo: Estágio em Análise de Dados", "Estágio", "Híbrido em São Paulo, SP", "SQL, Python, Power BI", formatCurrency(180_000)],
+      reasons: ["Cargo: Estágio em Análise de Dados", "Estágio", "Híbrido em São Paulo, SP", "SQL, Python, Power BI"],
       warnings: [],
     });
   });
@@ -284,6 +384,44 @@ describe("nota de compatibilidade", () => {
   it("remuneração abaixo do mínimo vira aviso e desconta pontos", () => {
     const match = scoreJob(job({ salaryCents: 120_000, text: "SQL Python Power BI" }), profile, TODAY);
     expect(match).toMatchObject({ excluded: false, score: 85, warnings: [`${formatCurrency(120_000)}: abaixo do seu mínimo`] });
+  });
+
+  it("habilidades do currículo somam com as palavras-chave e aparecem à parte", () => {
+    const match = scoreJob(
+      job({ text: "Usamos SQL, Python e Excel no dia a dia." }),
+      { ...profile, keywords: ["SQL"], resumeSkills: ["SQL", "Python", "Excel", "Figma"], resumeLanguages: [] },
+      TODAY,
+    );
+    expect(match).toMatchObject({ excluded: false, score: 100 });
+    if (!match.excluded) expect(match.reasons).toEqual(expect.arrayContaining(["SQL", "Do currículo: Python, Excel"]));
+  });
+
+  it("sem palavras-chave, o currículo sozinho já conta (e entende outros jeitos de escrever)", () => {
+    const withResume = { ...profile, keywords: [], resumeSkills: ["SQL", "Figma"], resumeLanguages: [] };
+    const match = scoreJob(job({ text: "Experiência com PostgreSQL." }), withResume, TODAY);
+    expect(match).toMatchObject({ excluded: false, reasons: expect.arrayContaining(["Do currículo: SQL"]) });
+    // Sem nada do currículo na vaga, a parte das habilidades fica zerada.
+    const none = scoreJob(job({ text: "Vaga de estágio." }), withResume, TODAY);
+    expect(none).toMatchObject({ excluded: false, score: 85 });
+  });
+
+  it("avisa quando a vaga cita idioma avançado e o currículo diz menos", () => {
+    const text = fold("Requisitos: Inglês avançado e Espanhol intermediário.");
+    expect(languageWarnings(text, [{ name: "Inglês", level: "basico" }])).toEqual([
+      "Inglês avançado: seu currículo diz básico",
+    ]);
+    expect(languageWarnings(text, [])).toEqual(["Inglês avançado: não está no seu currículo"]);
+    expect(languageWarnings(text, [{ name: "Inglês", level: "fluente" }])).toEqual([]);
+    // Idioma sem nível no currículo, ou sem currículo: sem aviso.
+    expect(languageWarnings(text, [{ name: "Inglês", level: null }])).toEqual([]);
+    expect(languageWarnings(text, null)).toEqual([]);
+    expect(languageWarnings(fold("Fluent English required"), [])).toEqual(["Inglês avançado: não está no seu currículo"]);
+    // "Inglês ou espanhol avançado": quem tem um dos dois não recebe aviso.
+    const either = fold("Inglês ou Espanhol avançado");
+    expect(languageWarnings(either, [{ name: "Inglês", level: "avancado" }, { name: "Espanhol", level: "basico" }])).toEqual([]);
+    expect(languageWarnings(either, [{ name: "Espanhol", level: "basico" }])).toEqual([
+      "Espanhol avançado: seu currículo diz básico",
+    ]);
   });
 
   it("tipo desconhecido vale metade para quem também aceita CLT", () => {
@@ -341,7 +479,7 @@ describe("busca", () => {
 });
 
 /** Cliente falso só com o que a busca usa (select, upsert, update). */
-function fakeClient(existingLeads: { source: string; external_id: string }[] = []) {
+function fakeClient(existingLeads: { source: string; external_id: string }[] = [], resume: unknown = null) {
   const calls: { table: string; op: string; payload?: unknown; options?: unknown }[] = [];
   const builder = (table: string) => {
     let op = "select";
@@ -351,12 +489,14 @@ function fakeClient(existingLeads: { source: string; external_id: string }[] = [
       select: () => self,
       eq: () => self,
       limit: () => self,
+      maybeSingle: () => self,
       upsert: (rows: unknown, opts: unknown) => ((op = "upsert"), (payload = rows), (options = opts), self),
       update: (patch: unknown) => ((op = "update"), (payload = patch), self),
       then(resolve: (value: unknown) => void) {
         calls.push({ table, op, payload, options });
         if (table === "job_leads" && op === "select") return resolve({ data: existingLeads, error: null });
         if (table === "applications") return resolve({ data: [], error: null });
+        if (table === "resumes") return resolve({ data: resume, error: null });
         if (op === "upsert") return resolve({ data: (payload as unknown[]).map((_, index) => ({ id: String(index) })), error: null });
         return resolve({ data: null, error: null });
       },
@@ -365,6 +505,42 @@ function fakeClient(existingLeads: { source: string; external_id: string }[] = [
   };
   return { client: { from: builder } as never, calls };
 }
+
+describe("descrição baixada depois (Greenhouse)", () => {
+  const detailUrl = "https://boards-api.greenhouse.io/v1/boards/stone/jobs/1";
+
+  it("baixa só a descrição que falta e refaz a nota com ela", async () => {
+    const [greenhouse] = rankJobs([job({ detailUrl })], profile, TODAY);
+    const [gupy] = rankJobs([job({ source: "gupy", externalId: "2", text: "SQL" })], profile, TODAY);
+    expect(greenhouse.score).toBe(85);
+
+    const fetchJson = vi.fn(async () => ({
+      content:
+        "&lt;p&gt;SQL, Python e Power BI.&lt;/p&gt;&lt;p&gt;Benefícios: VT&lt;/p&gt;&lt;p&gt;Bolsa: R$ 1.600,00&lt;/p&gt;",
+    }));
+    const completed = await completeJobs([gupy, greenhouse], profile, TODAY, fetchJson);
+
+    expect(fetchJson).toHaveBeenCalledTimes(1);
+    expect(fetchJson).toHaveBeenCalledWith(detailUrl);
+    expect(completed[0]).toMatchObject({
+      source: "greenhouse",
+      score: 100,
+      salaryCents: 160_000,
+      benefits: ["Vale-transporte"],
+      detailUrl: null,
+      reasons: expect.arrayContaining(["SQL, Python, Power BI"]),
+    });
+    expect(completed[1]).toBe(gupy);
+  });
+
+  it("se a descrição não vier, a vaga fica como estava", async () => {
+    const [greenhouse] = rankJobs([job({ detailUrl })], profile, TODAY);
+    const fetchJson = vi.fn(async () => {
+      throw new SourceError("não respondeu a tempo");
+    });
+    expect(await completeJobs([greenhouse], profile, TODAY, fetchJson)).toEqual([greenhouse]);
+  });
+});
 
 describe("runSearchForUser", () => {
   const row = {
@@ -402,6 +578,23 @@ describe("runSearchForUser", () => {
     expect(stats).toMatchObject({ analyzed: 3, matched: 2, added: 1, sources: 2, errors: [] });
     const saved = calls.find((call) => call.table === "job_profiles" && call.op === "update")!;
     expect(saved.payload).toMatchObject({ last_run_stats: { added: 1 } });
+  });
+
+  it("usa as habilidades e os idiomas do currículo, quando há um", async () => {
+    const resume = { skills: ["Python", "Power BI"], languages: [{ name: "Inglês", level: "basico" }] };
+    const { client, calls } = fakeClient([], resume);
+    const fetchJson = vi.fn(async () => ({
+      data: [{ ...gupyJob, description: `${gupyJob.description} Inglês avançado é obrigatório.` }],
+    }));
+    await runSearchForUser(client, "u1", row, { fetchJson, today: TODAY });
+
+    const upsert = calls.find((call) => call.op === "upsert")!;
+    expect(upsert.payload).toEqual([
+      expect.objectContaining({
+        reasons: expect.arrayContaining(["SQL", "Do currículo: Python, Power BI"]),
+        warnings: ["Inglês avançado: seu currículo diz básico"],
+      }),
+    ]);
   });
 });
 
@@ -443,7 +636,9 @@ describe("perfil e candidatura", () => {
       location: "Barueri, SP",
       work_model: "hibrido",
       job_type: "estagio",
-      salary_cents: null,
+      salary_cents: 100_000,
+      benefits: ["Vale-transporte", "Plano de saúde"],
+      workload: "6h por dia",
       published_at: null,
       deadline: "2026-12-05",
       score: 92,
@@ -464,8 +659,12 @@ describe("perfil e candidatura", () => {
       work_model: "hibrido",
       stage: "quero_candidatar",
       priority: "alta",
+      salary_cents: 100_000,
       notes: expect.stringContaining("Inscrições até 05/12/2026."),
     });
+    const { notes } = leadToApplication(lead, ["estagio"]);
+    expect(notes).toContain("Horário: 6h por dia.");
+    expect(notes).toContain("Benefícios citados na vaga: Vale-transporte, Plano de saúde.");
     expect(leadToApplication({ ...lead, source: "lever", job_type: null, score: 70 }, ["trainee"])).toMatchObject({
       platform: "site_empresa",
       job_type: "trainee",

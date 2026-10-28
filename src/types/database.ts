@@ -31,6 +31,24 @@ type JobProfileRow = {
   updated_at: string;
 };
 
+type ResumeRow = {
+  user_id: string;
+  file_path: string;
+  file_name: string;
+  file_size: number;
+  skills: string[];
+  /** [{ name: "Inglês", level: "avancado" }] */
+  languages: Json;
+  course: string | null;
+  education_status: "cursando" | "concluido" | null;
+  graduation_year: number | null;
+  city: string | null;
+  state: string | null;
+  suggested_roles: string[];
+  suggested_job_types: JobType[];
+  uploaded_at: string;
+};
+
 type JobLeadRow = {
   id: string;
   user_id: string;
@@ -43,6 +61,8 @@ type JobLeadRow = {
   work_model: WorkModel | null;
   job_type: JobType | null;
   salary_cents: number | null;
+  benefits: string[];
+  workload: string | null;
   published_at: string | null;
   deadline: string | null;
   score: number;
@@ -245,6 +265,12 @@ export type Database = {
         Row: JobProfileRow;
         Insert: Partial<JobProfileRow> & { roles: string[] };
         Update: Partial<JobProfileRow>;
+        Relationships: [];
+      };
+      resumes: {
+        Row: ResumeRow;
+        Insert: Partial<ResumeRow> & Pick<ResumeRow, "user_id" | "file_path" | "file_name" | "file_size">;
+        Update: Partial<ResumeRow>;
         Relationships: [];
       };
       job_leads: {

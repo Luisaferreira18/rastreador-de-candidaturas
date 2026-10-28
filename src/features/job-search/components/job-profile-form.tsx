@@ -12,16 +12,25 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ResumeCard, type ResumeSuggestion } from "@/features/resume/components/resume-card";
+import type { Resume } from "@/features/resume/resume";
 import { centsToInput, parseBRLToCents } from "@/lib/format";
 import { JOB_TYPES, WORK_MODELS } from "@/lib/options";
 import { cn } from "@/lib/utils";
 import { saveJobProfile } from "../actions";
 import { COMPANY_BOARDS, boardKey, parseBoardInput } from "../boards";
-import { STATES } from "../brazil";
+import { STATES, isUF } from "../brazil";
 import { MAX_ROLES, jobProfileFormSchema, type JobProfileFormValues } from "../profile";
 import { announceSearch, requestSearch } from "../search-client";
+import { fold } from "../text";
 
 const ANY_STATE = "todos";
+
+/** Junta as listas sem repetir ("SQL" e "sql" são a mesma). */
+function mergeTags(current: readonly string[], extra: readonly string[]): string[] {
+  const seen = new Set(current.map((item) => fold(item.trim())));
+  return [...current, ...extra.filter((item) => !seen.has(fold(item.trim())))];
+}
 
 function CheckboxPills<T extends string>({
   id,
@@ -96,7 +105,17 @@ function CheckboxRow({
   );
 }
 
-export function JobProfileForm({ defaultValues, isNew }: { defaultValues: JobProfileFormValues; isNew: boolean }) {
+export function JobProfileForm({
+  defaultValues,
+  isNew,
+  resume,
+  isDemo,
+}: {
+  defaultValues: JobProfileFormValues;
+  isNew: boolean;
+  resume: Resume | null;
+  isDemo: boolean;
+}) {
   const uid = useId();
   const fid = (name: string) => `${uid}-${name}`;
   const router = useRouter();
@@ -107,7 +126,8 @@ export function JobProfileForm({ defaultValues, isNew }: { defaultValues: JobPro
     handleSubmit,
     setError,
     setValue,
-    formState: { errors },
+    getValues,
+    formState: { errors, isSubmitted },
   } = useForm<JobProfileFormValues>({
     resolver: zodResolver(jobProfileFormSchema),
     defaultValues,
@@ -135,6 +155,20 @@ export function JobProfileForm({ defaultValues, isNew }: { defaultValues: JobPro
     });
   });
 
+  /** Sugestões do currículo: completam o formulário; a pessoa confere e salva. */
+  function applyResume(suggestion: ResumeSuggestion) {
+    const options = { shouldDirty: true, shouldValidate: isSubmitted };
+    const values = getValues();
+    if (suggestion.roles.length > 0) {
+      setValue("roles", mergeTags(values.roles, suggestion.roles).slice(0, MAX_ROLES), options);
+    }
+    if (suggestion.jobTypes.length > 0) {
+      setValue("jobTypes", [...new Set([...values.jobTypes, ...suggestion.jobTypes])], options);
+    }
+    if (suggestion.city) setValue("city", suggestion.city, options);
+    if (suggestion.state && isUF(suggestion.state)) setValue("state", suggestion.state, options);
+  }
+
   const arrayError = (error: unknown): string | undefined => {
     if (!error) return undefined;
     if (Array.isArray(error)) return error.find((item) => item?.message)?.message;
@@ -143,6 +177,8 @@ export function JobProfileForm({ defaultValues, isNew }: { defaultValues: JobPro
 
   return (
     <form onSubmit={onSubmit} noValidate className="space-y-8">
+      <ResumeCard resume={resume} isDemo={isDemo} onApply={applyResume} />
+
       <fieldset className="grid gap-5 sm:grid-cols-2" disabled={pending}>
         <legend className="float-left w-full text-sm font-semibold sm:col-span-2">O que você procura</legend>
         <FormField
@@ -273,13 +309,17 @@ export function JobProfileForm({ defaultValues, isNew }: { defaultValues: JobPro
       </fieldset>
 
       <fieldset className="grid gap-5 border-t pt-6" disabled={pending}>
-        <legend className="float-left w-full text-sm font-semibold">Seu currículo</legend>
+        <legend className="float-left w-full text-sm font-semibold">Palavras-chave</legend>
         <FormField
           id={fid("keywords")}
           label="Palavras-chave"
           optional
           error={arrayError(errors.keywords)}
-          hint="Habilidades e ferramentas do seu currículo. Vagas que citam mais delas sobem na lista."
+          hint={
+            resume
+              ? "Além das habilidades do currículo, que já contam sozinhas. Vagas que citam mais delas sobem na lista."
+              : "Habilidades e ferramentas que você domina. Vagas que citam mais delas sobem na lista."
+          }
         >
           <Controller
             control={control}

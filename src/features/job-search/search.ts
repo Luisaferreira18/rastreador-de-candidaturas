@@ -7,7 +7,7 @@
 import { companyKey } from "@/features/inbox/plan";
 import { COMPANY_BOARDS, boardKey } from "./boards";
 import { MIN_SCORE, scoreJob } from "./score";
-import { boardApiUrl, parseBoardResponse } from "./sources/boards";
+import { boardApiUrl, parseBoardResponse, withGreenhouseDetail } from "./sources/boards";
 import { gupyQueryUrls, parseGupyResponse } from "./sources/gupy";
 import { mapLimit, SourceError, type FetchJson } from "./sources/http";
 import { fold } from "./text";
@@ -76,17 +76,45 @@ export async function collectJobs(
   return { jobs, errors };
 }
 
-/** Vagas compatíveis, da nota mais alta para a mais baixa (e, no empate, a mais recente). */
+/** Da nota mais alta para a mais baixa (e, no empate, a mais recente). */
+function byScore(a: ScoredJob, b: ScoredJob): number {
+  return b.score - a.score || (b.publishedAt ?? "").localeCompare(a.publishedAt ?? "");
+}
+
+function scored(job: ScrapedJob, profile: SearchProfile, today: string): ScoredJob | null {
+  const match = scoreJob(job, profile, today);
+  if (match.excluded || match.score < MIN_SCORE) return null;
+  return { ...job, score: match.score, reasons: match.reasons, warnings: match.warnings };
+}
+
+/** Vagas compatíveis, da nota mais alta para a mais baixa. */
 export function rankJobs(jobs: readonly ScrapedJob[], profile: SearchProfile, today: string): ScoredJob[] {
-  const ranked: ScoredJob[] = [];
-  for (const job of jobs) {
-    const match = scoreJob(job, profile, today);
-    if (match.excluded || match.score < MIN_SCORE) continue;
-    ranked.push({ ...job, score: match.score, reasons: match.reasons, warnings: match.warnings });
-  }
-  return ranked.sort(
-    (a, b) => b.score - a.score || (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""),
-  );
+  return jobs
+    .map((job) => scored(job, profile, today))
+    .filter((job): job is ScoredJob => job !== null)
+    .sort(byScore);
+}
+
+/**
+ * Baixa a descrição das vagas que ainda não têm (Greenhouse) e refaz a nota:
+ * com o texto, entram as palavras-chave, a bolsa e os benefícios. Se o
+ * download falhar, a vaga fica como estava.
+ */
+export async function completeJobs(
+  jobs: readonly ScoredJob[],
+  profile: SearchProfile,
+  today: string,
+  fetchJson: FetchJson,
+): Promise<ScoredJob[]> {
+  const completed = await mapLimit(jobs, CONCURRENCY, async (job) => {
+    if (!job.detailUrl) return job;
+    try {
+      return scored(withGreenhouseDetail(job, await fetchJson(job.detailUrl)), profile, today);
+    } catch {
+      return job;
+    }
+  });
+  return completed.filter((job): job is ScoredJob => job !== null).sort(byScore);
 }
 
 /** Endereço sem parâmetros, para comparar links ("...?jobBoardSource=gupy_portal"). */

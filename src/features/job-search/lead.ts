@@ -16,6 +16,8 @@ export function leadToApplication(
   const notes = [
     `Encontrada pelo caça-vagas (${lead.score}% compatível, ${SOURCE_LABELS[lead.source]}).`,
     lead.reasons.length > 0 ? `Por quê: ${lead.reasons.join(" · ")}.` : null,
+    lead.workload ? `Horário: ${lead.workload}.` : null,
+    lead.benefits.length > 0 ? `Benefícios citados na vaga: ${lead.benefits.join(", ")}.` : null,
     lead.deadline ? `Inscrições até ${lead.deadline.split("-").reverse().join("/")}.` : null,
   ]
     .filter(Boolean)

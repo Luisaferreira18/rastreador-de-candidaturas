@@ -1,3 +1,4 @@
+import type { ResumeLanguage } from "@/features/resume/extract";
 import type { JobType, WorkModel } from "@/lib/options";
 
 /** De onde a vaga veio. */
@@ -36,6 +37,12 @@ export type ScrapedJob = {
   publishedAt: string | null;
   /** Data limite (AAAA-MM-DD), quando informada. */
   deadline: string | null;
+  /** Benefícios citados na descrição ("Vale-transporte", "Plano de saúde"). */
+  benefits: string[];
+  /** Jornada citada na descrição ("6h por dia"). */
+  workload: string | null;
+  /** Onde baixar a descrição, quando a listagem não traz (Greenhouse). */
+  detailUrl: string | null;
   /** Descrição e categorias, para procurar as palavras-chave do currículo. */
   text: string;
 };
@@ -53,6 +60,10 @@ export type SearchProfile = {
   useGupy: boolean;
   useCompanyBoards: boolean;
   extraBoards: BoardRef[];
+  /** Habilidades do currículo (somam com as palavras-chave). */
+  resumeSkills: string[];
+  /** Idiomas do currículo, ou null sem currículo (aí não há aviso de idioma). */
+  resumeLanguages: ResumeLanguage[] | null;
 };
 
 /** Resultado da nota de compatibilidade de uma vaga. */

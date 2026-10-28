@@ -7,6 +7,7 @@
 import type { WorkModel } from "@/lib/options";
 import { stateName, toUF } from "../brazil";
 import { gupyJobType, gupyTypesFor } from "../classify";
+import { extractJobDetails } from "../details";
 import { fold, searchTerms, stripHtml } from "../text";
 import type { ScrapedJob, SearchProfile } from "../types";
 import { SourceError } from "./http";
@@ -107,6 +108,9 @@ export function normalizeGupyJob(job: GupyJob): ScrapedJob | null {
   const uf = toUF(job.state);
   const city = job.city?.trim() || null;
   const workModel = job.workplaceType ? (WORKPLACE[job.workplaceType] ?? null) : null;
+  // A descrição completa já vem na busca, com bolsa e benefícios no fim.
+  const text = stripHtml(job.description ?? "");
+  const details = extractJobDetails(text);
   return {
     source: "gupy",
     externalId: String(job.id),
@@ -120,10 +124,13 @@ export function normalizeGupyJob(job: GupyJob): ScrapedJob | null {
     jobType,
     otherType,
     country: job.country ? (fold(job.country).startsWith("bra") ? "BR" : job.country) : null,
-    salaryCents: null,
+    salaryCents: details.salaryCents,
     publishedAt: job.publishedDate ?? null,
     deadline: job.applicationDeadline ? job.applicationDeadline.slice(0, 10) : null,
-    text: stripHtml(job.description ?? "").slice(0, 6000),
+    benefits: details.benefits,
+    workload: details.workload,
+    detailUrl: null,
+    text: text.slice(0, 6000),
   };
 }
 

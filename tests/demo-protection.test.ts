@@ -8,8 +8,8 @@ const EMAIL = "demo@rastreador.app";
 const PASSWORD = "senha-oficial-da-demo";
 
 /**
- * Cliente administrativo de mentira: registra a ordem das chamadas ao Auth e
- * à função protect_demo_account, além das tabelas (via createFakeSupabase).
+ * Cliente administrativo de mentira: registra a ordem das chamadas ao Auth, à
+ * função protect_demo_account e ao Storage, além das tabelas (via createFakeSupabase).
  */
 function fakeAdmin({ exists = true, protectError = null as unknown } = {}) {
   const order: string[] = [];
@@ -37,7 +37,17 @@ function fakeAdmin({ exists = true, protectError = null as unknown } = {}) {
     order.push(`from:${table}`);
     return db.client.from(table);
   };
-  return { admin: { from, rpc, auth } as never, rpc, auth, order, calls: db.calls };
+  const uploads: { bucket: string; path: string; size: number }[] = [];
+  const storage = {
+    from: (bucket: string) => ({
+      upload: vi.fn(async (path: string, body: Uint8Array) => {
+        order.push(`storage:${bucket}`);
+        uploads.push({ bucket, path, size: body.length });
+        return { data: { path }, error: null };
+      }),
+    }),
+  };
+  return { admin: { from, rpc, auth, storage } as never, rpc, auth, order, calls: db.calls, uploads };
 }
 
 describe("reset da conta demo com a proteção do banco", () => {
@@ -88,6 +98,28 @@ describe("reset da conta demo com a proteção do banco", () => {
     expect(fake.calls.some((call) => call.table === "applications" && call.operation === "insert")).toBe(true);
     expect(fake.calls.some((call) => call.table === "job_profiles" && call.operation === "upsert")).toBe(true);
     vi.doUnmock("@/lib/supabase/admin");
+  });
+
+  it("o reset também recoloca o currículo fictício, lido do PDF de verdade", async () => {
+    const fake = fakeAdmin();
+    await resetDemoAccount(fake.admin, EMAIL, PASSWORD);
+
+    expect(fake.uploads).toEqual([{ bucket: "curriculos", path: "demo-id/curriculo.pdf", size: expect.any(Number) }]);
+    const saved = fake.calls.find((call) => call.table === "resumes" && call.operation === "upsert");
+    expect(saved?.payload).toMatchObject({
+      user_id: "demo-id",
+      file_path: "demo-id/curriculo.pdf",
+      file_name: "curriculo-demo.pdf",
+      course: "Sistemas de Informação",
+      education_status: "cursando",
+      city: "São Paulo",
+      state: "SP",
+      skills: expect.arrayContaining(["SQL", "Python", "Power BI", "JavaScript"]),
+      languages: [
+        { name: "Inglês", level: "avancado" },
+        { name: "Espanhol", level: "basico" },
+      ],
+    });
   });
 
   it("resetDemoAccount devolve o que foi recriado", async () => {

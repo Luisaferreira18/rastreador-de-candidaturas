@@ -4,6 +4,7 @@
  */
 
 import { detectJobType, detectOtherType, detectWorkModel } from "../classify";
+import { extractJobDetails, htmlToText } from "../details";
 import { stripHtml } from "../text";
 import type { BoardRef, ScrapedJob } from "../types";
 import { SourceError } from "./http";
@@ -12,6 +13,11 @@ export function boardApiUrl(board: BoardRef): string {
   return board.source === "greenhouse"
     ? `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(board.slug)}/jobs`
     : `https://api.lever.co/v0/postings/${encodeURIComponent(board.slug)}?mode=json`;
+}
+
+/** Uma vaga do Greenhouse, com a descrição. */
+export function greenhouseJobUrl(slug: string, id: string): string {
+  return `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(slug)}/jobs/${encodeURIComponent(id)}`;
 }
 
 /** Nome da empresa quando a página não está na lista pronta: "stone" → "Stone". */
@@ -53,7 +59,28 @@ export function normalizeGreenhouseJob(job: GreenhouseJob, board: BoardRef): Scr
     salaryCents: null,
     publishedAt: job.first_published ?? job.updated_at ?? null,
     deadline: job.application_deadline ? job.application_deadline.slice(0, 10) : null,
+    benefits: [],
+    workload: null,
+    // A listagem com as descrições pesa megabytes; elas são baixadas uma a
+    // uma, só para as vagas que passarem no filtro (veja completeJobs).
+    detailUrl: greenhouseJobUrl(board.slug, String(job.id)),
     text: "",
+  };
+}
+
+/** Completa a vaga com a descrição (HTML com as tags escapadas). */
+export function withGreenhouseDetail(job: ScrapedJob, json: unknown): ScrapedJob {
+  const content = (json as { content?: unknown })?.content;
+  if (typeof content !== "string") throw new SourceError("respondeu num formato inesperado");
+  const text = htmlToText(content);
+  const details = extractJobDetails(text);
+  return {
+    ...job,
+    salaryCents: job.salaryCents ?? details.salaryCents,
+    benefits: details.benefits,
+    workload: details.workload,
+    detailUrl: null,
+    text: text.slice(0, 6000),
   };
 }
 
@@ -79,6 +106,8 @@ type LeverPosting = {
   categories?: { commitment?: string; location?: string; department?: string; team?: string };
   descriptionPlain?: string;
   lists?: { text?: string; content?: string }[];
+  /** Texto do fim da vaga, onde costumam ficar os benefícios. */
+  additionalPlain?: string;
   salaryRange?: { currency?: string; interval?: string; min?: number; max?: number } | null;
 };
 
@@ -104,6 +133,10 @@ export function normalizeLeverPosting(posting: LeverPosting, board: BoardRef): S
   const location = categories.location?.trim() || null;
   const commitment = categories.commitment ?? "";
   const lists = (posting.lists ?? []).map((list) => `${list.text ?? ""} ${stripHtml(list.content ?? "")}`).join(" ");
+  const text = [categories.department, categories.team, posting.descriptionPlain, lists, posting.additionalPlain]
+    .filter(Boolean)
+    .join(" ");
+  const details = extractJobDetails(text);
   return {
     source: "lever",
     externalId: posting.id,
@@ -119,13 +152,13 @@ export function normalizeLeverPosting(posting: LeverPosting, board: BoardRef): S
     jobType: detectJobType(`${title} ${commitment}`),
     otherType: detectOtherType(title),
     country: posting.country ?? null,
-    salaryCents: leverSalaryCents(posting.salaryRange),
+    salaryCents: leverSalaryCents(posting.salaryRange) ?? details.salaryCents,
     publishedAt: typeof posting.createdAt === "number" ? new Date(posting.createdAt).toISOString() : null,
     deadline: null,
-    text: [categories.department, categories.team, posting.descriptionPlain, lists]
-      .filter(Boolean)
-      .join(" ")
-      .slice(0, 6000),
+    benefits: details.benefits,
+    workload: details.workload,
+    detailUrl: null,
+    text: text.slice(0, 6000),
   };
 }
 

@@ -2,12 +2,14 @@
  * Nota de compatibilidade (0 a 100) entre uma vaga e o perfil, por regras
  * simples e explicáveis: cada ponto vira um motivo que a pessoa vê na tela.
  *
- *   Cargo 45 · Tipo de vaga 20 · Local e modelo 20 · Palavras-chave 15
+ *   Cargo 45 · Tipo de vaga 20 · Local e modelo 20 · Palavras-chave e currículo 15
  *
  * Vagas que claramente não servem (outro tipo, nível sênior, outra cidade,
  * fora do Brasil, palavra a evitar) ficam de fora em vez de ganhar nota baixa.
  */
 
+import { LANGUAGE_LEVEL_LABELS, levelRank, type ResumeLanguage } from "@/features/resume/extract";
+import { mentionsSkill } from "@/features/resume/skills";
 import { formatCurrency } from "@/lib/format";
 import { jobTypeLabel, workModelLabel, type JobType } from "@/lib/options";
 import { findCities, findUFs, findUFsInTitle, isBrazilLocation } from "./brazil";
@@ -92,6 +94,43 @@ export function placeMatch(job: ScrapedJob, profile: SearchProfile): PlaceResult
   return { score: profile.workModels.includes("remoto") ? 0.5 : 0.3, reason: null };
 }
 
+/** Idiomas que as vagas costumam pedir em nível alto. */
+const LANGUAGE_DEMANDS = [
+  {
+    name: "Inglês",
+    pattern: /\bingles (?:em nivel |nivel )?(?:avancado|fluente)|fluencia (?:em|no) ingles|\b(?:advanced|fluent) english/,
+  },
+  {
+    name: "Espanhol",
+    pattern: /\bespanhol (?:em nivel |nivel )?(?:avancado|fluente)|fluencia (?:em|no) espanhol|\b(?:advanced|fluent) spanish/,
+  },
+] as const;
+
+/**
+ * Vaga que cita idioma avançado quando o currículo diz menos (ou não cita o
+ * idioma). Só aviso, sem descontar pontos: muitas vagas pedem e aceitam menos.
+ * Sem currículo, ou com idioma sem nível, não há aviso.
+ */
+export function languageWarnings(foldedJobText: string, languages: readonly ResumeLanguage[] | null): string[] {
+  if (!languages) return [];
+  // "Inglês ou espanhol avançado": basta um dos dois.
+  const either = /\b(?:ingles|espanhol) (?:ou|e\/ou) (?:ingles|espanhol) (?:em nivel |nivel )?(?:avancado|fluente)/;
+  const advanced = (name: string) =>
+    languages.some((language) => language.name === name && levelRank(language.level) >= levelRank("avancado"));
+  if (either.test(foldedJobText) && (advanced("Inglês") || advanced("Espanhol"))) return [];
+
+  const warnings: string[] = [];
+  for (const demand of LANGUAGE_DEMANDS) {
+    if (!demand.pattern.test(foldedJobText)) continue;
+    const own = languages.find((language) => language.name === demand.name);
+    if (!own) warnings.push(`${demand.name} avançado: não está no seu currículo`);
+    else if (own.level && levelRank(own.level) < levelRank("avancado")) {
+      warnings.push(`${demand.name} avançado: seu currículo diz ${LANGUAGE_LEVEL_LABELS[own.level]}`);
+    }
+  }
+  return warnings;
+}
+
 export function scoreJob(job: ScrapedJob, profile: SearchProfile, today: string): JobMatch {
   const title = job.title;
   const foldedTitle = fold(title);
@@ -126,11 +165,15 @@ export function scoreJob(job: ScrapedJob, profile: SearchProfile, today: string)
   const place = placeMatch(job, profile);
   if ("excluded" in place) return excluded(place.excluded);
 
-  // Palavras-chave do currículo
+  // Palavras-chave do perfil e habilidades do currículo ("SQL" também vale "MySQL")
   const haystack = fold(`${title} ${job.text}`);
-  const foundKeywords = profile.keywords.filter((keyword) => containsTerm(haystack, keyword));
+  const foundKeywords = profile.keywords.filter((keyword) => mentionsSkill(haystack, keyword));
+  const typed = new Set(profile.keywords.map((keyword) => fold(keyword.trim())));
+  const resumeSkills = profile.resumeSkills.filter((skill) => !typed.has(fold(skill)));
+  const foundSkills = resumeSkills.filter((skill) => mentionsSkill(haystack, skill));
+  const termCount = profile.keywords.length + resumeSkills.length;
   const keywordScore =
-    profile.keywords.length > 0 ? Math.min(1, foundKeywords.length / Math.min(3, profile.keywords.length)) : 0;
+    termCount > 0 ? Math.min(1, (foundKeywords.length + foundSkills.length) / Math.min(3, termCount)) : 0;
 
   // Remuneração (só quando a fonte informa)
   const lowSalary =
@@ -142,16 +185,19 @@ export function scoreJob(job: ScrapedJob, profile: SearchProfile, today: string)
     job.jobType && jobTypeLabel(job.jobType),
     place.reason,
     foundKeywords.length > 0 && foundKeywords.slice(0, 4).join(", "),
-    job.salaryCents !== null && !lowSalary && formatCurrency(job.salaryCents),
+    foundSkills.length > 0 && `Do currículo: ${foundSkills.slice(0, 4).join(", ")}`,
   ].filter((reason): reason is string => typeof reason === "string" && reason !== "");
-  const warnings = lowSalary ? [`${formatCurrency(job.salaryCents)}: abaixo do seu mínimo`] : [];
+  const warnings = [
+    ...(lowSalary ? [`${formatCurrency(job.salaryCents)}: abaixo do seu mínimo`] : []),
+    ...languageWarnings(haystack, profile.resumeLanguages),
+  ];
 
-  const total = WEIGHTS.role + WEIGHTS.type + WEIGHTS.place + (profile.keywords.length > 0 ? WEIGHTS.keywords : 0);
+  const total = WEIGHTS.role + WEIGHTS.type + WEIGHTS.place + (termCount > 0 ? WEIGHTS.keywords : 0);
   const earned =
     WEIGHTS.role * role.fraction +
     WEIGHTS.type * typeScore +
     WEIGHTS.place * place.score +
-    (profile.keywords.length > 0 ? WEIGHTS.keywords * keywordScore : 0);
+    (termCount > 0 ? WEIGHTS.keywords * keywordScore : 0);
   const score = Math.max(0, Math.min(100, Math.round((earned / total) * 100) - penalty));
 
   return { excluded: false, score, reasons, warnings };

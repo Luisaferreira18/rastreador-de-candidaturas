@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseLanguages, type Resume } from "@/features/resume/resume";
 import { centsToInput, parseBRLToCents } from "@/lib/format";
 import { JOB_TYPE_VALUES, WORK_MODEL_VALUES } from "@/lib/options";
 import type { Tables, TablesInsert } from "@/types/database";
@@ -107,8 +108,11 @@ export function toJobProfileFormValues(row: JobProfileRow): JobProfileFormValues
   };
 }
 
-/** Converte a linha do banco no formato usado pela busca. */
-export function toSearchProfile(row: JobProfileRow): SearchProfile {
+/** Converte a linha do banco (e o currículo, se houver) no formato usado pela busca. */
+export function toSearchProfile(
+  row: JobProfileRow,
+  resume: Pick<Resume, "skills" | "languages"> | null = null,
+): SearchProfile {
   return {
     roles: row.roles,
     keywords: row.keywords,
@@ -121,5 +125,7 @@ export function toSearchProfile(row: JobProfileRow): SearchProfile {
     useGupy: row.use_gupy,
     useCompanyBoards: row.use_company_boards,
     extraBoards: row.extra_boards.map((value) => parseBoardInput(value)).filter((board): board is BoardRef => board !== null),
+    resumeSkills: resume?.skills ?? [],
+    resumeLanguages: resume ? parseLanguages(resume.languages) : null,
   };
 }

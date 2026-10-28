@@ -1,7 +1,15 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { extractResume } from "@/features/resume/extract";
+import { readPdfText } from "@/features/resume/pdf";
+import { RESUME_BUCKET, resumePath, toResumeRow } from "@/features/resume/resume";
 import { todayISO } from "@/lib/format";
 import type { Database } from "@/types/database";
 import { buildSampleData } from "./sample-data";
+
+/** Currículo fictício da conta demo (também usado nos testes). */
+export const DEMO_RESUME_FILE = join(process.cwd(), "assets/demo/curriculo-demo.pdf");
 
 type Client = SupabaseClient<Database>;
 
@@ -124,11 +132,30 @@ export async function seedDemoJobProfile(supabase: Client, userId: string) {
   if (error) throw error;
 }
 
+/**
+ * Currículo fictício da conta demo, lido do PDF como um currículo enviado.
+ * Só o cliente admin consegue gravar: a conta é protegida e os visitantes não
+ * podem enviar nem apagar currículo nela.
+ */
+export async function seedDemoResume(admin: Client, userId: string) {
+  const bytes = new Uint8Array(await readFile(DEMO_RESUME_FILE));
+  const upload = await admin.storage
+    .from(RESUME_BUCKET)
+    .upload(resumePath(userId), bytes, { contentType: "application/pdf", upsert: true });
+  if (upload.error) throw upload.error;
+
+  const extraction = extractResume(await readPdfText(bytes), Number(todayISO().slice(0, 4)));
+  const row = toResumeRow(userId, { name: "curriculo-demo.pdf", size: bytes.length }, extraction);
+  const { error } = await admin.from("resumes").upsert(row, { onConflict: "user_id" });
+  if (error) throw error;
+}
+
 /** Recria a conta demo do zero: usado pelo cron diário e por `npm run seed:demo`. */
 export async function resetDemoAccount(admin: Client, email: string, password: string) {
   const userId = await ensureDemoUser(admin, email, password);
   await clearUserData(admin, userId);
   const result = await seedSampleData(admin, userId);
   await seedDemoJobProfile(admin, userId);
+  await seedDemoResume(admin, userId);
   return { userId, ...result };
 }

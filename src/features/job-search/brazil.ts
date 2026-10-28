@@ -116,6 +116,12 @@ export function findUFsInTitle(title: string): UF[] {
   return [...found];
 }
 
+/** Estado de uma cidade conhecida ("Curitiba" → "PR"). */
+export function ufOfCity(city: string): UF | null {
+  const folded = fold(city).trim();
+  return CITY_UF.find(([name]) => name === folded)?.[1] ?? null;
+}
+
 /** Cidades conhecidas citadas no texto ("Belo Horizonte, MG; São Paulo, SP" → as duas). */
 export function findCities(text: string): string[] {
   const folded = fold(text);
