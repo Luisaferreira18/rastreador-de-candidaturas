@@ -12,6 +12,7 @@ const SHORTCUTS: { keys: string[]; label: string }[] = [
   { keys: ["G", "L"], label: "Ir para a lista" },
   { keys: ["G", "C"], label: "Ir para a caixa de entrada" },
   { keys: ["G", "V"], label: "Ir para as vagas sugeridas" },
+  { keys: ["G", "O"], label: "Ir para os concursos" },
   { keys: ["?"], label: "Mostrar os atalhos" },
   { keys: ["Esc"], label: "Fechar janelas e menus" },
 ];

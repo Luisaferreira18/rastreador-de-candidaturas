@@ -6,14 +6,15 @@ import type { Task } from "@/features/applications/types";
 import { failure, friendlyDbError, success, zodFieldErrors, type ActionResult } from "@/lib/action-result";
 import { revalidateApp } from "@/lib/revalidate";
 import { createClient } from "@/lib/supabase/server";
-import { taskFormSchema, type TaskFormValues } from "./schema";
+import { parentColumns, taskFormSchema, taskParentSchema, type TaskFormValues, type TaskParent } from "./schema";
 
 const SESSION_EXPIRED = "Sua sessão expirou. Entre novamente para continuar.";
 const TASK_NOT_FOUND = "Não encontramos essa tarefa. Atualize a página.";
 const idSchema = z.uuid();
 
-export async function createTask(applicationId: string, values: TaskFormValues): Promise<ActionResult<Task>> {
-  if (!idSchema.safeParse(applicationId).success) return failure("Candidatura inválida.");
+/** Cria um próximo passo numa candidatura ou num concurso. */
+export async function createTask(parent: TaskParent, values: TaskFormValues): Promise<ActionResult<Task>> {
+  if (!taskParentSchema.safeParse(parent).success) return failure("Não encontramos onde salvar o próximo passo.");
   const parsed = taskFormSchema.safeParse(values);
   if (!parsed.success) return failure("Revise o próximo passo.", zodFieldErrors(parsed.error));
 
@@ -24,7 +25,7 @@ export async function createTask(applicationId: string, values: TaskFormValues):
   const { data, error } = await supabase
     .from("tasks")
     .insert({
-      application_id: applicationId,
+      ...parentColumns(parent),
       user_id: user.id,
       title: parsed.data.title,
       due_date: parsed.data.dueDate || null,

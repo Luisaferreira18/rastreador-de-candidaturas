@@ -22,22 +22,26 @@ export type StageKey = (typeof STAGE_KEYS)[number];
 /** inicial = ainda não se candidatou; processo = em andamento; final = encerrada. */
 export type StageKind = "inicial" | "processo" | "final";
 
-export type StageDefinition = {
-  key: StageKey;
+/** O que toda etapa tem, de candidatura ou de concurso (veja concurso-stages.ts). */
+export type StageInfo<K extends string = string> = {
+  key: K;
   label: string;
   shortLabel: string;
   kind: StageKind;
-  /**
-   * Posição no funil (0 = quero me candidatar, 7 = aprovada).
-   * Etapas que encerram sem avançar (reprovada, desisti) não têm posição.
-   */
-  funnelOrder: number | null;
   /** Cor em hexadecimal, usada nos gráficos. */
   hex: string;
   /** Classes do Tailwind (escritas por extenso para o Tailwind encontrá-las). */
   dot: string;
   badge: string;
   column: string;
+};
+
+export type StageDefinition = StageInfo<StageKey> & {
+  /**
+   * Posição no funil (0 = quero me candidatar, 7 = aprovada).
+   * Etapas que encerram sem avançar (reprovada, desisti) não têm posição.
+   */
+  funnelOrder: number | null;
 };
 
 export const STAGES: readonly StageDefinition[] = [

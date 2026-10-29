@@ -26,7 +26,8 @@ function NavLinks({
           // A página de detalhe pertence à seção "Quadro".
           (item.href === "/quadro" && activePath?.startsWith("/candidaturas")) ||
           (item.href === "/caixa-de-entrada" && activePath?.startsWith("/caixa-de-entrada")) ||
-          (item.href === "/vagas" && activePath?.startsWith("/vagas"));
+          (item.href === "/vagas" && activePath?.startsWith("/vagas")) ||
+          (item.href === "/concursos" && activePath?.startsWith("/concursos"));
         const badge = badges?.[item.href] ?? 0;
         return (
           <Link

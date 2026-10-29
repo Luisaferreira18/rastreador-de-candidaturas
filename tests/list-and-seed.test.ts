@@ -103,7 +103,7 @@ describe("dados de exemplo", () => {
 
   it("usa a data de 'enviada' como data da candidatura e liga as tarefas a candidaturas existentes", () => {
     const ids = new Set(plan.applications.map((a) => a.id));
-    expect(plan.tasks.every((task) => ids.has(task.application_id))).toBe(true);
+    expect(plan.tasks.every((task) => task.application_id && ids.has(task.application_id))).toBe(true);
     const aurora = plan.applications.find((a) => a.company === "Banco Aurora")!;
     expect(aurora.applied_at).toBe("2026-09-21"); // enviada há 28 dias
   });

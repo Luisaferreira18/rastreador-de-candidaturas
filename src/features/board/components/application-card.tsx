@@ -24,15 +24,10 @@ import {
   timestampToISODate,
 } from "@/lib/format";
 import { workModelLabel } from "@/lib/options";
-import type { StageKey } from "@/lib/stages";
+import { STAGES, type StageKey } from "@/lib/stages";
 import { cn } from "@/lib/utils";
+import { justDragged } from "./drag-guard";
 import { MoveToMenuItems } from "./move-to-menu";
-
-/** Momento do último "soltar": evita abrir o card logo depois de arrastá-lo. */
-let lastDragEndedAt = 0;
-export function markDragEnded() {
-  lastDragEndedAt = Date.now();
-}
 
 const DUE_STYLES = {
   overdue: "text-red-600 dark:text-red-400",
@@ -74,7 +69,7 @@ export function ApplicationCard({
         className="absolute inset-0 z-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
         aria-label={`${card.company}, ${card.role_title}`}
         onClick={(event) => {
-          if (Date.now() - lastDragEndedAt < 250) event.preventDefault();
+          if (justDragged()) event.preventDefault();
         }}
         draggable={false}
       />
@@ -144,7 +139,7 @@ export function ApplicationCard({
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Mover para</DropdownMenuLabel>
-            <MoveToMenuItems current={card.stage} onMove={onMove} />
+            <MoveToMenuItems stages={STAGES} current={card.stage} onMove={onMove} />
           </DropdownMenuContent>
         </DropdownMenu>
       )}

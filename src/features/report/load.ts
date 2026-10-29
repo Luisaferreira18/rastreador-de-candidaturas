@@ -50,7 +50,12 @@ export async function loadSnapshotForUser(supabase: SupabaseClient<Database>, us
       .select("id, company, role_title, stage, platform, stage_changed_at, applied_at, created_at")
       .eq("user_id", userId),
     supabase.from("stage_history").select("application_id, from_stage, to_stage, changed_at").eq("user_id", userId),
-    supabase.from("tasks").select("application_id, title, due_date").eq("user_id", userId).eq("done", false),
+    supabase
+      .from("tasks")
+      .select("application_id, title, due_date")
+      .eq("user_id", userId)
+      .eq("done", false)
+      .not("application_id", "is", null),
     supabase
       .from("inbox_items")
       .select("id", { count: "exact", head: true })
@@ -78,7 +83,9 @@ export async function loadSnapshotForUser(supabase: SupabaseClient<Database>, us
   return {
     applications: applications.data ?? [],
     history: history.data ?? [],
-    tasks: tasks.data ?? [],
+    tasks: (tasks.data ?? []).flatMap((task) =>
+      task.application_id ? [{ ...task, application_id: task.application_id }] : [],
+    ),
     pendingSuggestions: suggestions.count ?? 0,
     newLeads: leads.data ?? [],
     newLeadsCount: leadsCount.count ?? 0,

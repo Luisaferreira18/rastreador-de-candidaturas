@@ -28,6 +28,7 @@ import { getApplicationDetail } from "@/features/applications/queries";
 import { TaskList } from "@/features/tasks/components/task-list";
 import { formatCurrency, formatDate, formatDateTime, todayISO } from "@/lib/format";
 import { jobTypeLabel, platformLabel, workModelLabel } from "@/lib/options";
+import { getStage } from "@/lib/stages";
 
 export async function generateMetadata({ params }: PageProps<"/candidaturas/[id]">): Promise<Metadata> {
   const { id } = await params;
@@ -179,7 +180,7 @@ async function ApplicationDetail({ params }: { params: Promise<{ id: string }> }
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <TaskList applicationId={application.id} tasks={tasks} today={today} />
+              <TaskList parent={{ applicationId: application.id }} tasks={tasks} today={today} />
             </CardContent>
           </Card>
         </div>
@@ -191,7 +192,7 @@ async function ApplicationDetail({ params }: { params: Promise<{ id: string }> }
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <StageTimeline history={history} today={today} />
+            <StageTimeline history={history} today={today} getStage={getStage} />
           </CardContent>
         </Card>
       </div>

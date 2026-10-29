@@ -3,22 +3,9 @@ import { centsToInput, isValidISODate, parseBRLToCents } from "@/lib/format";
 import { JOB_TYPE_VALUES, PLATFORM_VALUES, PRIORITY_VALUES, WORK_MODEL_VALUES } from "@/lib/options";
 import { STAGE_KEYS } from "@/lib/stages";
 import type { Tables, TablesInsert } from "@/types/database";
+import { isHttpUrl, normalizeUrl } from "@/lib/url";
 
-/** Acrescenta https:// quando a pessoa cola só "gupy.io/vaga/123". */
-export function normalizeUrl(value: string): string {
-  const trimmed = value.trim();
-  if (trimmed === "") return "";
-  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-}
-
-function isHttpUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return (url.protocol === "http:" || url.protocol === "https:") && url.hostname.includes(".");
-  } catch {
-    return false;
-  }
-}
+export { normalizeUrl };
 
 /**
  * Schema do formulário de candidatura. Os campos opcionais são texto

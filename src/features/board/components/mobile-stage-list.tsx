@@ -2,28 +2,28 @@
 
 import { ChevronRight } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import type { ApplicationSummary } from "@/features/applications/types";
-import { STAGES, type StageKey } from "@/lib/stages";
 import { cn } from "@/lib/utils";
 import type { Columns } from "../board-state";
-import { ApplicationCard } from "./application-card";
+import type { BoardCard, KanbanConfig } from "./kanban-types";
 
 /**
  * No celular, o quadro vira uma lista agrupada por etapa. Arrastar não é
  * prático em telas pequenas, então a etapa muda pelo menu "..." de cada card.
  */
-export function MobileStageList({
+export function MobileStageList<K extends string, T extends BoardCard<K>>({
   columns,
   today,
+  config,
   onMoveCard,
 }: {
-  columns: Columns<ApplicationSummary>;
+  columns: Columns<T, K>;
   today: string;
-  onMoveCard: (cardId: string, stage: StageKey) => void;
+  config: KanbanConfig<K, T>;
+  onMoveCard: (cardId: string, stage: K) => void;
 }) {
   return (
     <div className="space-y-2">
-      {STAGES.map((stage) => {
+      {config.stages.map((stage) => {
         const cards = columns[stage.key];
         return (
           <Collapsible
@@ -39,16 +39,12 @@ export function MobileStageList({
             </CollapsibleTrigger>
             <CollapsibleContent>
               {cards.length === 0 ? (
-                <p className="px-4 pb-3 text-xs text-muted-foreground">Nenhuma candidatura nesta etapa.</p>
+                <p className="px-4 pb-3 text-xs text-muted-foreground">{config.texts.emptyStage}</p>
               ) : (
                 <ul className="grid gap-2 px-2 pb-2">
                   {cards.map((card) => (
                     <li key={card.id}>
-                      <ApplicationCard
-                        card={card}
-                        today={today}
-                        onMove={(toStage) => onMoveCard(card.id, toStage)}
-                      />
+                      {config.renderCard(card, { today, onMove: (toStage) => onMoveCard(card.id, toStage) })}
                     </li>
                   ))}
                 </ul>

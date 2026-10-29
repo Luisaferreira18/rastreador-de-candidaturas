@@ -1,14 +1,29 @@
 import { diffDaysISO, formatDateTime, formatDayCount, timestampToISODate } from "@/lib/format";
-import { getStage } from "@/lib/stages";
+import type { StageInfo } from "@/lib/stages";
 import { cn } from "@/lib/utils";
-import type { StageHistoryEntry } from "../types";
+
+type HistoryEntry<K extends string> = { id: string; from_stage: K | null; to_stage: K; changed_at: string };
 
 function durationLabel(days: number): string {
   return days <= 0 ? "menos de 1 dia" : formatDayCount(days);
 }
 
-/** Linha do tempo das etapas, da mais antiga para a atual. */
-export function StageTimeline({ history, today }: { history: StageHistoryEntry[]; today: string }) {
+/**
+ * Linha do tempo das etapas, da mais antiga para a atual. Serve a candidaturas
+ * e concursos: `getStage` diz o nome e a cor de cada etapa.
+ */
+export function StageTimeline<K extends string>({
+  history,
+  today,
+  getStage,
+  createdLabel = "adicionada",
+}: {
+  history: HistoryEntry<K>[];
+  today: string;
+  getStage: (key: K) => StageInfo<K>;
+  /** O que aparece na primeira etapa ("adicionada", "adicionado"). */
+  createdLabel?: string;
+}) {
   if (history.length === 0) {
     return <p className="text-sm text-muted-foreground">Ainda não há mudanças de etapa registradas.</p>;
   }
@@ -47,7 +62,7 @@ export function StageTimeline({ history, today }: { history: StageHistoryEntry[]
               </div>
               <p className="text-xs text-muted-foreground">
                 <time dateTime={entry.changed_at}>{formatDateTime(entry.changed_at)}</time>
-                {entry.from_stage ? <> · veio de {getStage(entry.from_stage).label}</> : <> · adicionada</>}
+                {entry.from_stage ? <> · veio de {getStage(entry.from_stage).label}</> : <> · {createdLabel}</>}
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {isCurrent ? `Nesta etapa há ${durationLabel(days)}` : `Ficou ${durationLabel(days)} nesta etapa`}

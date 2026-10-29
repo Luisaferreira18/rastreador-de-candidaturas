@@ -7,21 +7,22 @@ import { ChevronsLeftRight, ChevronsRightLeft, Plus } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import type { ApplicationSummary } from "@/features/applications/types";
-import type { StageDefinition, StageKey } from "@/lib/stages";
+import type { StageInfo } from "@/lib/stages";
 import { cn } from "@/lib/utils";
-import { ApplicationCard } from "./application-card";
+import type { BoardCard, KanbanConfig } from "./kanban-types";
 
-export const columnDroppableId = (stage: StageKey) => `column:${stage}`;
+export const columnDroppableId = (stage: string) => `column:${stage}`;
 
-function SortableCard({
+function SortableCard<K extends string, T extends BoardCard<K>>({
   card,
   today,
+  config,
   onMove,
 }: {
-  card: ApplicationSummary;
+  card: T;
   today: string;
-  onMove: (stage: StageKey) => void;
+  config: KanbanConfig<K, T>;
+  onMove: (stage: K) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
@@ -37,26 +38,29 @@ function SortableCard({
       {...listeners}
       aria-roledescription="card arrastável"
     >
-      <ApplicationCard card={card} today={today} onMove={onMove} placeholder={isDragging} />
+      {config.renderCard(card, { today, onMove, placeholder: isDragging })}
     </li>
   );
 }
 
-export function KanbanColumn({
+export function KanbanColumn<K extends string, T extends BoardCard<K>>({
   stage,
   cards,
   today,
+  config,
   collapsed,
   onToggleCollapsed,
   onMoveCard,
 }: {
-  stage: StageDefinition;
-  cards: ApplicationSummary[];
+  stage: StageInfo<K>;
+  cards: T[];
   today: string;
+  config: KanbanConfig<K, T>;
   collapsed: boolean;
   onToggleCollapsed?: () => void;
-  onMoveCard: (cardId: string, stage: StageKey) => void;
+  onMoveCard: (cardId: string, stage: K) => void;
 }) {
+  const { texts } = config;
   const { setNodeRef, isOver } = useDroppable({
     id: columnDroppableId(stage.key),
     data: { type: "column", stage: stage.key },
@@ -66,7 +70,7 @@ export function KanbanColumn({
     return (
       <section
         ref={setNodeRef}
-        aria-label={`${stage.label}: ${cards.length} candidaturas (coluna recolhida)`}
+        aria-label={`${stage.label}: ${cards.length} ${texts.items} (coluna recolhida)`}
         className={cn(
           "flex w-11 shrink-0 flex-col items-center gap-3 rounded-xl border border-transparent py-3 transition-colors",
           stage.column,
@@ -90,7 +94,7 @@ export function KanbanColumn({
 
   return (
     <section
-      aria-label={`${stage.label}: ${cards.length} candidaturas`}
+      aria-label={`${stage.label}: ${cards.length} ${texts.items}`}
       className={cn(
         "flex w-64 shrink-0 flex-col rounded-xl border border-transparent transition-colors",
         stage.column,
@@ -115,12 +119,12 @@ export function KanbanColumn({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="ghost" size="icon-xs" asChild>
-                <Link href={`/candidaturas/nova?etapa=${stage.key}`} aria-label={`Nova candidatura em ${stage.label}`}>
+                <Link href={config.newHref(stage.key)} aria-label={`${texts.newItem} em ${stage.label}`}>
                   <Plus />
                 </Link>
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Nova candidatura nesta etapa</TooltipContent>
+            <TooltipContent>{texts.newItem} nesta etapa</TooltipContent>
           </Tooltip>
         </div>
       </header>
@@ -132,6 +136,7 @@ export function KanbanColumn({
               key={card.id}
               card={card}
               today={today}
+              config={config}
               onMove={(toStage) => onMoveCard(card.id, toStage)}
             />
           ))}
@@ -142,7 +147,7 @@ export function KanbanColumn({
                 isOver && "border-primary/50 text-foreground",
               )}
             >
-              Arraste uma candidatura para cá
+              {texts.dropHere}
             </li>
           )}
         </ul>

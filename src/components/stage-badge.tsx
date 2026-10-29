@@ -1,11 +1,11 @@
-import { getStage, type StageKey } from "@/lib/stages";
+import { getStage, type StageInfo, type StageKey } from "@/lib/stages";
 import { cn } from "@/lib/utils";
 
 export function StageDot({ stage, className }: { stage: StageKey; className?: string }) {
   return <span aria-hidden className={cn("inline-block size-2 shrink-0 rounded-full", getStage(stage).dot, className)} />;
 }
 
-/** Etiqueta colorida da etapa. */
+/** Etiqueta colorida da etapa de uma candidatura. */
 export function StageBadge({
   stage,
   short = false,
@@ -15,7 +15,19 @@ export function StageBadge({
   short?: boolean;
   className?: string;
 }) {
-  const definition = getStage(stage);
+  return <StagePill definition={getStage(stage)} short={short} className={className} />;
+}
+
+/** Etiqueta colorida de qualquer etapa (candidatura ou concurso). */
+export function StagePill({
+  definition,
+  short = false,
+  className,
+}: {
+  definition: StageInfo;
+  short?: boolean;
+  className?: string;
+}) {
   return (
     <span
       className={cn(

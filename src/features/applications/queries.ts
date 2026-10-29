@@ -32,7 +32,8 @@ export async function listApplicationSummaries(): Promise<ApplicationSummary[]> 
       .from("tasks")
       .select("application_id, due_date")
       .eq("user_id", user.id)
-      .eq("done", false),
+      .eq("done", false)
+      .not("application_id", "is", null),
   ]);
 
   if (applicationsResult.error) throw loadError(applicationsResult.error);
@@ -40,6 +41,8 @@ export async function listApplicationSummaries(): Promise<ApplicationSummary[]> 
 
   const pendingByApplication = new Map<string, { count: number; nextDueDate: string | null }>();
   for (const task of tasksResult.data) {
+    // Tarefas de concursos ficam de fora (application_id vazio).
+    if (!task.application_id) continue;
     const current = pendingByApplication.get(task.application_id) ?? { count: 0, nextDueDate: null };
     current.count += 1;
     if (task.due_date && (!current.nextDueDate || task.due_date < current.nextDueDate)) {
@@ -125,7 +128,7 @@ export async function getDashboardData(): Promise<DashboardData> {
 
   const applicationsById = new Map(applicationsResult.data.map((a) => [a.id, a]));
   const tasks: TaskWithApplication[] = tasksResult.data.flatMap((task: Task) => {
-    const application = applicationsById.get(task.application_id);
+    const application = task.application_id ? applicationsById.get(task.application_id) : undefined;
     if (!application) return [];
     return [
       {

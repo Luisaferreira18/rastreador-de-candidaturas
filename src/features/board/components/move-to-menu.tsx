@@ -2,20 +2,22 @@
 
 import { Check } from "lucide-react";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import { STAGES, type StageKey } from "@/lib/stages";
+import type { StageInfo } from "@/lib/stages";
 import { cn } from "@/lib/utils";
 
 /** Itens "Mover para <etapa>" para usar dentro de um DropdownMenu. */
-export function MoveToMenuItems({
+export function MoveToMenuItems<K extends string>({
+  stages,
   current,
   onMove,
 }: {
-  current: StageKey;
-  onMove: (stage: StageKey) => void;
+  stages: readonly StageInfo<K>[];
+  current: K;
+  onMove: (stage: K) => void;
 }) {
   return (
     <>
-      {STAGES.map((stage) => (
+      {stages.map((stage) => (
         <DropdownMenuItem
           key={stage.key}
           disabled={stage.key === current}

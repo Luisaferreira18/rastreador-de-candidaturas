@@ -13,7 +13,7 @@ import type { Task } from "@/features/applications/types";
 import { formatDate, formatRelativeDay } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { createTask, deleteTask, setTaskDone } from "../actions";
-import { taskFormSchema, type TaskFormValues } from "../schema";
+import { parentColumns, taskFormSchema, type TaskFormValues, type TaskParent } from "../schema";
 import { dueStatus } from "../upcoming";
 
 type OptimisticAction =
@@ -39,8 +39,18 @@ function sortTasks(tasks: Task[]): Task[] {
   );
 }
 
-/** Próximos passos de uma candidatura: criar, concluir e excluir, com resposta instantânea. */
-export function TaskList({ applicationId, tasks, today }: { applicationId: string; tasks: Task[]; today: string }) {
+/** Próximos passos de uma candidatura ou de um concurso: criar, concluir e excluir, com resposta instantânea. */
+export function TaskList({
+  parent,
+  tasks,
+  today,
+  emptyHint = 'Anote o que precisa fazer, como "entregar o case até sexta".',
+}: {
+  parent: TaskParent;
+  tasks: Task[];
+  today: string;
+  emptyHint?: string;
+}) {
   const [optimisticTasks, applyOptimistic] = useOptimistic(tasks, (current: Task[], action: OptimisticAction) => {
     switch (action.type) {
       case "add":
@@ -70,7 +80,7 @@ export function TaskList({ applicationId, tasks, today }: { applicationId: strin
         type: "add",
         task: {
           id: `temp-${Date.now()}`,
-          application_id: applicationId,
+          ...parentColumns(parent),
           user_id: "",
           title: values.title.trim(),
           due_date: values.dueDate || null,
@@ -79,7 +89,7 @@ export function TaskList({ applicationId, tasks, today }: { applicationId: strin
           created_at: new Date().toISOString(),
         },
       });
-      const result = await createTask(applicationId, values);
+      const result = await createTask(parent, values);
       if (!result.ok) {
         toast.error(result.error);
         return;
@@ -117,7 +127,7 @@ export function TaskList({ applicationId, tasks, today }: { applicationId: strin
         <EmptyState
           icon={ListTodo}
           title="Nenhum próximo passo"
-          description='Anote o que precisa fazer, como "entregar o case até sexta".'
+          description={emptyHint}
           compact
         />
       ) : (

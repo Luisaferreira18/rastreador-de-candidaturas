@@ -7,9 +7,68 @@
 import type { StageKey } from "@/lib/stages";
 import type { InboxConfidence, InboxKind, InboxSource, InboxStatus } from "@/features/inbox/types";
 import type { JobSource, LeadStatus } from "@/features/job-search/types";
+import type { ConcursoStageKey } from "@/lib/concurso-stages";
+import type { DateKind, EducationLevel, Sphere, SubjectStatus } from "@/lib/concurso-options";
 import type { JobType, Platform, Priority, WorkModel } from "@/lib/options";
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+
+type ConcursoRow = {
+  id: string;
+  user_id: string;
+  organ: string;
+  role_title: string;
+  exam_board: string | null;
+  sphere: Sphere;
+  education: EducationLevel;
+  area: string | null;
+  salary_cents: number | null;
+  vacancies: number | null;
+  reserve_list: boolean;
+  city: string | null;
+  state: string | null;
+  notice_url: string | null;
+  registration_url: string | null;
+  notes: string | null;
+  priority: Priority;
+  stage: ConcursoStageKey;
+  position: number;
+  stage_changed_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type ConcursoStageHistoryRow = {
+  id: string;
+  concurso_id: string;
+  user_id: string;
+  from_stage: ConcursoStageKey | null;
+  to_stage: ConcursoStageKey;
+  changed_at: string;
+};
+
+type ConcursoDateRow = {
+  id: string;
+  concurso_id: string;
+  user_id: string;
+  kind: DateKind;
+  date: string;
+  time: string | null;
+  note: string | null;
+  created_at: string;
+};
+
+type ConcursoSubjectRow = {
+  id: string;
+  concurso_id: string;
+  user_id: string;
+  name: string;
+  weight: number | null;
+  questions: number | null;
+  status: SubjectStatus;
+  position: number;
+  created_at: string;
+};
 
 type JobProfileRow = {
   user_id: string;
@@ -181,7 +240,9 @@ export type Database = {
       tasks: {
         Row: {
           id: string;
-          application_id: string;
+          /** Uma das duas é preenchida (CHECK no banco). */
+          application_id: string | null;
+          concurso_id: string | null;
           user_id: string;
           title: string;
           due_date: string | null;
@@ -191,7 +252,8 @@ export type Database = {
         };
         Insert: {
           id?: string;
-          application_id: string;
+          application_id?: string | null;
+          concurso_id?: string | null;
           user_id?: string;
           title: string;
           due_date?: string | null;
@@ -201,7 +263,8 @@ export type Database = {
         };
         Update: {
           id?: string;
-          application_id?: string;
+          application_id?: string | null;
+          concurso_id?: string | null;
           user_id?: string;
           title?: string;
           due_date?: string | null;
@@ -259,6 +322,30 @@ export type Database = {
         Row: { message_id: string; created_at: string };
         Insert: { message_id: string; created_at?: string };
         Update: { message_id?: string; created_at?: string };
+        Relationships: [];
+      };
+      concursos: {
+        Row: ConcursoRow;
+        Insert: Partial<ConcursoRow> & Pick<ConcursoRow, "organ" | "role_title">;
+        Update: Partial<ConcursoRow>;
+        Relationships: [];
+      };
+      concurso_stage_history: {
+        Row: ConcursoStageHistoryRow;
+        Insert: Partial<ConcursoStageHistoryRow> & Pick<ConcursoStageHistoryRow, "concurso_id" | "to_stage">;
+        Update: Partial<ConcursoStageHistoryRow>;
+        Relationships: [];
+      };
+      concurso_dates: {
+        Row: ConcursoDateRow;
+        Insert: Partial<ConcursoDateRow> & Pick<ConcursoDateRow, "concurso_id" | "kind" | "date">;
+        Update: Partial<ConcursoDateRow>;
+        Relationships: [];
+      };
+      concurso_subjects: {
+        Row: ConcursoSubjectRow;
+        Insert: Partial<ConcursoSubjectRow> & Pick<ConcursoSubjectRow, "concurso_id" | "name">;
+        Update: Partial<ConcursoSubjectRow>;
         Relationships: [];
       };
       job_profiles: {

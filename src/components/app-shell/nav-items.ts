@@ -1,7 +1,7 @@
-import { Inbox, KanbanSquare, LayoutDashboard, List, Radar, type LucideIcon } from "lucide-react";
+import { Inbox, KanbanSquare, Landmark, LayoutDashboard, List, Radar, type LucideIcon } from "lucide-react";
 
 export type NavItem = {
-  href: "/painel" | "/quadro" | "/lista" | "/caixa-de-entrada" | "/vagas";
+  href: "/painel" | "/quadro" | "/lista" | "/caixa-de-entrada" | "/vagas" | "/concursos";
   label: string;
   icon: LucideIcon;
   /** Segunda tecla do atalho "G + tecla". */
@@ -14,4 +14,5 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/lista", label: "Lista", icon: List, shortcut: "L" },
   { href: "/caixa-de-entrada", label: "Caixa de entrada", icon: Inbox, shortcut: "C" },
   { href: "/vagas", label: "Vagas sugeridas", icon: Radar, shortcut: "V" },
+  { href: "/concursos", label: "Concursos", icon: Landmark, shortcut: "O" },
 ];

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ArrowUpDown, FilterX, Search, SearchX } from "lucide-react";
+import { FilterX, Search, SearchX } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -8,16 +8,15 @@ import { CompanyAvatar } from "@/components/company-avatar";
 import { JobTypeBadge } from "@/components/job-type-badge";
 import { EmptyState } from "@/components/empty-state";
 import { Kbd } from "@/components/kbd";
+import { FilterSelect, SortableHead } from "@/components/list-controls";
 import { PriorityLabel } from "@/components/priority-indicator";
 import { StageBadge } from "@/components/stage-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatCurrencyCompact, formatDate, formatRelativeDay, timestampToISODate } from "@/lib/format";
 import { JOB_TYPES, PLATFORMS, PRIORITIES, WORK_MODELS, platformLabel, workModelLabel } from "@/lib/options";
 import { STAGES } from "@/lib/stages";
-import { cn } from "@/lib/utils";
 import {
   DEFAULT_FILTERS,
   filterAndSortApplications,
@@ -29,44 +28,8 @@ import {
 } from "../list-filters";
 import type { ApplicationSummary } from "../types";
 
-const ALL = "todas";
-
-function FilterSelect({
-  label,
-  value,
-  allLabel,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string | null;
-  allLabel: string;
-  options: readonly { value: string; label: string; dot?: string }[];
-  onChange: (value: string | null) => void;
-}) {
-  return (
-    <Select value={value ?? ALL} onValueChange={(next) => onChange(next === ALL ? null : next)}>
-      <SelectTrigger
-        size="sm"
-        aria-label={label}
-        className={cn("w-full min-w-0 sm:w-auto sm:min-w-36", value && "border-primary/40 bg-primary/5")}
-      >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={ALL}>{allLabel}</SelectItem>
-        {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {option.dot && <span aria-hidden className={cn("size-2 rounded-full", option.dot)} />}
-            {option.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
-function SortableHead({
+/** Cabeçalho ordenável ligado aos filtros da lista. */
+function SortHead({
   label,
   sortKey,
   filters,
@@ -79,25 +42,14 @@ function SortableHead({
   onSort: (key: SortKey) => void;
   className?: string;
 }) {
-  const active = filters.sort === sortKey;
-  const Icon = !active ? ArrowUpDown : filters.direction === "asc" ? ArrowUp : ArrowDown;
   return (
-    <TableHead
+    <SortableHead
+      label={label}
+      active={filters.sort === sortKey}
+      direction={filters.direction}
+      onSort={() => onSort(sortKey)}
       className={className}
-      aria-sort={active ? (filters.direction === "asc" ? "ascending" : "descending") : undefined}
-    >
-      <button
-        type="button"
-        onClick={() => onSort(sortKey)}
-        className={cn(
-          "-ml-2 inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium hover:bg-accent",
-          active ? "text-foreground" : "text-muted-foreground",
-        )}
-      >
-        {label}
-        <Icon className={cn("size-3", !active && "opacity-50")} />
-      </button>
-    </TableHead>
+    />
   );
 }
 
@@ -222,15 +174,15 @@ export function ApplicationsTable({ applications, today }: { applications: Appli
             <Table>
               <TableHeader className="bg-muted/40">
                 <TableRow className="hover:bg-transparent">
-                  <SortableHead label="Empresa e cargo" sortKey="empresa" filters={filters} onSort={toggleSort} className="pl-4" />
-                  <SortableHead label="Etapa" sortKey="etapa" filters={filters} onSort={toggleSort} />
+                  <SortHead label="Empresa e cargo" sortKey="empresa" filters={filters} onSort={toggleSort} className="pl-4" />
+                  <SortHead label="Etapa" sortKey="etapa" filters={filters} onSort={toggleSort} />
                   <TableHead className="text-xs">Tipo</TableHead>
-                  <SortableHead label="Prioridade" sortKey="prioridade" filters={filters} onSort={toggleSort} />
+                  <SortHead label="Prioridade" sortKey="prioridade" filters={filters} onSort={toggleSort} />
                   <TableHead className="hidden text-xs lg:table-cell">Plataforma</TableHead>
                   <TableHead className="hidden text-xs xl:table-cell">Modelo</TableHead>
-                  <SortableHead label="Remuneração" sortKey="remuneracao" filters={filters} onSort={toggleSort} className="text-right" />
-                  <SortableHead label="Candidatura" sortKey="candidatura" filters={filters} onSort={toggleSort} />
-                  <SortableHead label="Atualizada" sortKey="atualizada" filters={filters} onSort={toggleSort} className="pr-4" />
+                  <SortHead label="Remuneração" sortKey="remuneracao" filters={filters} onSort={toggleSort} className="text-right" />
+                  <SortHead label="Candidatura" sortKey="candidatura" filters={filters} onSort={toggleSort} />
+                  <SortHead label="Atualizada" sortKey="atualizada" filters={filters} onSort={toggleSort} className="pr-4" />
                 </TableRow>
               </TableHeader>
               <TableBody>
