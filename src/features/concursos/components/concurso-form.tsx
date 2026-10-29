@@ -311,7 +311,7 @@ export function ConcursoForm({ mode, defaultValues, concursoId }: Props) {
             {dates.fields.map((field, index) => {
               const rowErrors = errors.dates?.[index];
               return (
-                <li key={field.id} className="grid gap-2 rounded-lg border p-2 sm:grid-cols-[11rem_9.5rem_6.5rem_1fr_auto] sm:items-start">
+                <li key={field.id} className="grid gap-2 rounded-lg border p-2 sm:grid-cols-[12.5rem_9.5rem_6.5rem_1fr_auto] sm:items-start">
                   <Controller
                     control={control}
                     name={`dates.${index}.kind`}

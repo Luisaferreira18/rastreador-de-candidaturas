@@ -21,7 +21,8 @@ export function isPdf(bytes: Uint8Array): boolean {
   return bytes.length > signature.length && signature.every((byte, index) => bytes[index] === byte);
 }
 
-export async function readPdfText(bytes: Uint8Array): Promise<string> {
+/** Texto do PDF. Currículos têm poucas páginas; editais podem ter mais de cem (`maxPages`). */
+export async function readPdfText(bytes: Uint8Array, { maxPages = MAX_PAGES }: { maxPages?: number } = {}): Promise<string> {
   let pdf: Awaited<ReturnType<typeof getDocumentProxy>>;
   try {
     // Cópia: o pdf.js transfere o buffer recebido e o deixa vazio.
@@ -30,7 +31,13 @@ export async function readPdfText(bytes: Uint8Array): Promise<string> {
     throw new PdfError("Não foi possível abrir esse PDF. Ele pode estar corrompido ou protegido por senha.");
   }
   try {
-    if (pdf.numPages > MAX_PAGES) throw new PdfError(`O currículo pode ter no máximo ${MAX_PAGES} páginas.`);
+    if (pdf.numPages > maxPages) {
+      throw new PdfError(
+        maxPages === MAX_PAGES
+          ? `O currículo pode ter no máximo ${MAX_PAGES} páginas.`
+          : `Esse PDF tem mais de ${maxPages} páginas. Copie e cole só a parte do edital que interessa.`,
+      );
+    }
     const { text } = await extractText(pdf, { mergePages: true });
     return text;
   } finally {

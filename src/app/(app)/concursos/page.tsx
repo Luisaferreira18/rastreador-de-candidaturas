@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { FileSearch, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -20,11 +20,18 @@ export default function ConcursosPage() {
         title="Concursos"
         description="Os concursos que você acompanha, com o cronograma, as matérias e a contagem até a prova."
         actions={
-          <Button size="sm" asChild>
-            <Link href="/concursos/novo">
-              <Plus /> Novo concurso
-            </Link>
-          </Button>
+          <>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/concursos/ler-edital">
+                <FileSearch /> Ler edital
+              </Link>
+            </Button>
+            <Button size="sm" asChild>
+              <Link href="/concursos/novo">
+                <Plus /> Novo concurso
+              </Link>
+            </Button>
+          </>
         }
       />
       <ConcursosNav active="/concursos" />
