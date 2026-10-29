@@ -517,7 +517,7 @@ const EXAM_BOARDS: readonly [string, RegExp][] = [
   ["Instituto Access", /instituto access/],
   ["IDIB", /\bidib\b/],
   ["Fafipa", /fafipa/],
-  ["Avança SP", /avanca sp/],
+  ["Avança SP", /avanca ?sp(?![a-z])/],
   ["Objetiva Concursos", /objetiva concursos/],
 ];
 

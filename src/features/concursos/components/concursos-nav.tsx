@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 const TABS = [
   { href: "/concursos", label: "Lista" },
   { href: "/concursos/quadro", label: "Quadro" },
+  { href: "/concursos/sugeridos", label: "Sugeridos" },
 ] as const;
 
 export type ConcursosTab = (typeof TABS)[number]["href"];

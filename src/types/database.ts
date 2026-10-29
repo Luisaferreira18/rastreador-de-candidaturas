@@ -70,6 +70,69 @@ type ConcursoSubjectRow = {
   created_at: string;
 };
 
+type ConcursoProfileRow = {
+  user_id: string;
+  education: EducationLevel;
+  areas: string[];
+  roles: string[];
+  spheres: Sphere[];
+  cities: string[];
+  states: string[];
+  min_salary_cents: number | null;
+  exam_boards: string[];
+  accepts_relocation: boolean;
+  auto_search: boolean;
+  last_run_at: string | null;
+  last_run_stats: Json | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type ConcursoNoticeRow = {
+  id: string;
+  source: "dou" | "querido_diario";
+  external_id: string;
+  organ: string;
+  title: string | null;
+  /** [{ title, education }] */
+  roles: Json;
+  exam_board: string | null;
+  sphere: Sphere | null;
+  salary_cents: number | null;
+  vacancies: number | null;
+  reserve_list: boolean;
+  city: string | null;
+  state: string | null;
+  notice_url: string;
+  registration_url: string | null;
+  published_at: string | null;
+  /** [{ kind, date, time, note }] */
+  dates: Json;
+  excerpt: string | null;
+  found_at: string;
+};
+
+type ConcursoLeadRow = {
+  id: string;
+  user_id: string;
+  notice_id: string;
+  role: string | null;
+  score: number;
+  reasons: string[];
+  warnings: string[];
+  status: "nova" | "acompanhando" | "descartada";
+  concurso_id: string | null;
+  found_at: string;
+  resolved_at: string | null;
+};
+
+type ConcursoSourceRunRow = {
+  source: "dou" | "querido_diario";
+  last_date: string | null;
+  last_run_at: string | null;
+  stats: Json | null;
+};
+
 type JobProfileRow = {
   user_id: string;
   roles: string[];
@@ -346,6 +409,38 @@ export type Database = {
         Row: ConcursoSubjectRow;
         Insert: Partial<ConcursoSubjectRow> & Pick<ConcursoSubjectRow, "concurso_id" | "name">;
         Update: Partial<ConcursoSubjectRow>;
+        Relationships: [];
+      };
+      concurso_profiles: {
+        Row: ConcursoProfileRow;
+        Insert: Partial<ConcursoProfileRow> & Pick<ConcursoProfileRow, "user_id">;
+        Update: Partial<ConcursoProfileRow>;
+        Relationships: [];
+      };
+      concurso_notices: {
+        Row: ConcursoNoticeRow;
+        Insert: Partial<ConcursoNoticeRow> & Pick<ConcursoNoticeRow, "source" | "external_id" | "organ" | "notice_url">;
+        Update: Partial<ConcursoNoticeRow>;
+        Relationships: [];
+      };
+      concurso_leads: {
+        Row: ConcursoLeadRow;
+        Insert: Partial<ConcursoLeadRow> & Pick<ConcursoLeadRow, "notice_id" | "score">;
+        Update: Partial<ConcursoLeadRow>;
+        Relationships: [
+          {
+            foreignKeyName: "concurso_leads_notice_id_fkey";
+            columns: ["notice_id"];
+            isOneToOne: false;
+            referencedRelation: "concurso_notices";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      concurso_source_runs: {
+        Row: ConcursoSourceRunRow;
+        Insert: Partial<ConcursoSourceRunRow> & Pick<ConcursoSourceRunRow, "source">;
+        Update: Partial<ConcursoSourceRunRow>;
         Relationships: [];
       };
       job_profiles: {

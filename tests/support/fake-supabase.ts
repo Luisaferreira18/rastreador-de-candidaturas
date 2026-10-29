@@ -76,6 +76,10 @@ export function createFakeSupabase(responses: Partial<Record<`${string}.${Operat
         call.filters.push([column, value]);
         return builder;
       },
+      neq(column: string, value: unknown) {
+        call.filters.push([`${column} !=`, value]);
+        return builder;
+      },
       not(column: string, operator: string, value: unknown) {
         call.filters.push([`${column} not ${operator}`, value]);
         return builder;
