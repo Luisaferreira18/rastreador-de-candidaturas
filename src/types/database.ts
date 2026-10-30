@@ -90,7 +90,8 @@ type ConcursoProfileRow = {
 
 type ConcursoNoticeRow = {
   id: string;
-  source: "dou" | "querido_diario";
+  /** "exemplo": editais fictícios da conta demo, que a busca ignora. */
+  source: "dou" | "querido_diario" | "exemplo";
   external_id: string;
   organ: string;
   title: string | null;

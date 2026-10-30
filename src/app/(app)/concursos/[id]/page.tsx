@@ -3,6 +3,7 @@ import {
   BookOpen,
   Building2,
   CalendarDays,
+  CalendarPlus,
   ClipboardList,
   ExternalLink,
   GraduationCap,
@@ -22,7 +23,7 @@ import { Suspense } from "react";
 import { CompanyAvatar } from "@/components/company-avatar";
 import { PriorityLabel } from "@/components/priority-indicator";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StageTimeline } from "@/features/applications/components/stage-timeline";
 import { ConcursoActions } from "@/features/concursos/components/concurso-actions";
@@ -173,9 +174,24 @@ async function ConcursoDetail({ params }: { params: Promise<{ id: string }> }) {
               <CardTitle className="flex items-center gap-2 text-sm">
                 <CalendarDays className="size-4 text-muted-foreground" /> Cronograma
               </CardTitle>
+              {dates.length > 0 && (
+                <CardAction>
+                  <Button variant="ghost" size="sm" asChild className="-my-1.5">
+                    <a href={`/api/concursos/agenda?id=${concurso.id}`} download>
+                      <CalendarPlus /> Adicionar à agenda
+                    </a>
+                  </Button>
+                </CardAction>
+              )}
             </CardHeader>
             <CardContent>
               <ScheduleTimeline dates={dates} today={today} />
+              {dates.length > 0 && (
+                <p className="mt-4 text-xs text-muted-foreground">
+                  &quot;Adicionar à agenda&quot; baixa um arquivo .ics com as datas e lembretes na véspera. No celular, abra o arquivo;
+                  no Google Agenda pelo computador, use Configurações › Importar e exportar.
+                </p>
+              )}
             </CardContent>
           </Card>
 

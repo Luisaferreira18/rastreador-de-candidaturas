@@ -92,7 +92,12 @@ export function UserMenu({ user, compact = false }: { user: CurrentUser; compact
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <a href="/api/export" download>
-            <Download /> Exportar tudo em CSV
+            <Download /> Exportar candidaturas em CSV
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <a href="/api/export/concursos" download>
+            <Download /> Exportar concursos em CSV
           </a>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={openShortcuts}>

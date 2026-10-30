@@ -114,6 +114,34 @@ export function createAssistantDeps(config: WhatsAppConfig): AssistantDeps {
       return { total: count.count ?? 0, leads: leads.data ?? [] };
     },
 
+    async loadOpenConcursoLeads(userId) {
+      const [leads, count] = await Promise.all([
+        admin
+          .from("concurso_leads")
+          .select("role, score, notice:concurso_notices(organ, notice_url, registration_url)")
+          .eq("user_id", userId)
+          .eq("status", "nova")
+          .order("score", { ascending: false })
+          .order("found_at", { ascending: false })
+          .limit(5),
+        admin
+          .from("concurso_leads")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .eq("status", "nova"),
+      ]);
+      if (leads.error) throw leads.error;
+      if (count.error) throw count.error;
+      return {
+        total: count.count ?? 0,
+        leads: (leads.data ?? []).flatMap((lead) =>
+          lead.notice
+            ? [{ organ: lead.notice.organ, role: lead.role, url: lead.notice.registration_url ?? lead.notice.notice_url, score: lead.score }]
+            : [],
+        ),
+      };
+    },
+
     async loadPendingSuggestions(userId) {
       const { data, error } = await admin
         .from("inbox_items")

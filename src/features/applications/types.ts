@@ -16,7 +16,10 @@ export type ApplicationDetail = {
   tasks: Task[];
 };
 
-/** Tarefa com os dados básicos da candidatura (lista de próximos prazos). */
-export type TaskWithApplication = Task & {
-  application: Pick<Application, "id" | "company" | "role_title" | "stage">;
+/**
+ * Tarefa com o nome, o link e a cor da etapa da candidatura ou do concurso a
+ * que pertence (lista de próximos prazos do painel).
+ */
+export type TaskWithParent = Task & {
+  parent: { href: string; name: string; dot: string };
 };

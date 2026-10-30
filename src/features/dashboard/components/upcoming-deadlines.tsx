@@ -5,9 +5,8 @@ import Link from "next/link";
 import { startTransition, useOptimistic } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/empty-state";
-import { StageDot } from "@/components/stage-badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { TaskWithApplication } from "@/features/applications/types";
+import type { TaskWithParent } from "@/features/applications/types";
 import { setTaskDone } from "@/features/tasks/actions";
 import { groupUpcomingTasks } from "@/features/tasks/upcoming";
 import { formatDateShort, formatRelativeDay } from "@/lib/format";
@@ -19,15 +18,15 @@ const GROUPS = [
   { key: "soon", title: "Próximos 7 dias", tone: "text-foreground", bar: "bg-primary" },
 ] as const;
 
-/** Tarefas com prazo nos próximos 7 dias (e as atrasadas), agrupadas e em destaque. */
-export function UpcomingDeadlines({ tasks, today }: { tasks: TaskWithApplication[]; today: string }) {
+/** Tarefas com prazo nos próximos 7 dias (e as atrasadas), de candidaturas e concursos, agrupadas e em destaque. */
+export function UpcomingDeadlines({ tasks, today }: { tasks: TaskWithParent[]; today: string }) {
   const [visible, removeOptimistic] = useOptimistic(tasks, (current, id: string) =>
     current.filter((task) => task.id !== id),
   );
   const groups = groupUpcomingTasks(visible, today);
   const total = groups.overdue.length + groups.today.length + groups.soon.length;
 
-  function complete(task: TaskWithApplication) {
+  function complete(task: TaskWithParent) {
     startTransition(async () => {
       removeOptimistic(task.id);
       const result = await setTaskDone(task.id, true);
@@ -41,7 +40,7 @@ export function UpcomingDeadlines({ tasks, today }: { tasks: TaskWithApplication
       <EmptyState
         icon={CalendarCheck}
         title="Nenhum prazo nos próximos 7 dias"
-        description="Adicione próximos passos com data na página de cada candidatura."
+        description="Adicione próximos passos com data na página de cada candidatura ou concurso."
         compact
         className="border-0"
       />
@@ -75,11 +74,11 @@ export function UpcomingDeadlines({ tasks, today }: { tasks: TaskWithApplication
                   <div className="min-w-0 flex-1">
                     <p className="text-sm leading-5">{task.title}</p>
                     <Link
-                      href={`/candidaturas/${task.application.id}`}
+                      href={task.parent.href}
                       className="mt-0.5 inline-flex max-w-full items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                     >
-                      <StageDot stage={task.application.stage} className="size-1.5" />
-                      <span className="truncate">{task.application.company}</span>
+                      <span aria-hidden className={cn("inline-block size-1.5 shrink-0 rounded-full", task.parent.dot)} />
+                      <span className="truncate">{task.parent.name}</span>
                     </Link>
                   </div>
                   <div className={cn("shrink-0 text-right text-xs", group.tone)}>

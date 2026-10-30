@@ -136,7 +136,13 @@ export async function scoreForUser(
   const since = new Date(Date.parse(`${today}T00:00:00Z`) - CATALOG_WINDOW_DAYS * 86_400_000).toISOString();
 
   const [catalog, existing] = await Promise.all([
-    supabase.from("concurso_notices").select("*").gte("found_at", since).order("found_at", { ascending: false }).limit(2000),
+    supabase
+      .from("concurso_notices")
+      .select("*")
+      .neq("source", "exemplo")
+      .gte("found_at", since)
+      .order("found_at", { ascending: false })
+      .limit(2000),
     supabase.from("concurso_leads").select("notice_id").eq("user_id", userId).limit(10_000),
   ]);
   if (catalog.error) throw catalog.error;

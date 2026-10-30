@@ -25,6 +25,13 @@ const snapshot: ReportSnapshot = {
   pendingSuggestions: 1,
   newLeads: [],
   newLeadsCount: 0,
+  concursos: [{ id: "c1", organ: "Agência Nacional de Dados", role_title: "Analista de TI", stage: "edital_publicado" }],
+  concursoDates: [
+    { concurso_id: "c1", kind: "inscricao_fim", date: "2026-10-23", time: null },
+    { concurso_id: "c1", kind: "prova", date: "2026-11-15", time: "08:00:00" },
+  ],
+  newConcursoLeads: [],
+  newConcursoLeadsCount: 0,
 };
 
 function fakeDeps(overrides: Partial<AssistantDeps> = {}) {
@@ -44,6 +51,10 @@ function fakeDeps(overrides: Partial<AssistantDeps> = {}) {
         { company: "Vertem", title: "Estágio em Dados", url: "https://vertem.gupy.io/job/1", score: 92 },
         { company: "SiDi", title: "Estágio em Engenharia de Dados", url: "https://sidi.gupy.io/job/2", score: 87 },
       ],
+    })),
+    loadOpenConcursoLeads: vi.fn(async () => ({
+      total: 1,
+      leads: [{ organ: "Tribunal de Contas do Planalto", role: "Analista de Controle Externo", url: "https://example.com/inscricao", score: 81 }],
     })),
     send: vi.fn(async (to: string, body: string) => {
       sent.push({ to, body });
@@ -69,6 +80,9 @@ describe("comandos do assistente", () => {
     expect(detectCommand("vagas")).toBe("vagas");
     expect(detectCommand("Oi, vagas novas?")).toBe("vagas");
     expect(detectCommand("minhas vagas")).toBe("andamento");
+    expect(detectCommand("concursos")).toBe("concursos");
+    expect(detectCommand("Oi, meus concursos?")).toBe("concursos");
+    expect(detectCommand("editais abertos")).toBe("concursos");
   });
 
   it("perguntas livres não viram comando", () => {
@@ -141,6 +155,27 @@ describe("conversa com o assistente", () => {
     const empty = fakeDeps({ loadOpenLeads: vi.fn(async () => ({ total: 0, leads: [] })) });
     await handleIncomingMessage(empty.deps, message("vagas"), ctx);
     expect(empty.sent[0].body).toContain("Nenhuma vaga nova por enquanto");
+  });
+
+  it("concursos: alertas da semana, próximas datas e concursos novos; prazos também traz os concursos", async () => {
+    const { deps, sent } = fakeDeps();
+    await handleIncomingMessage(deps, message("concursos"), ctx);
+    expect(sent[0].body).toContain(
+      "*Atenção nos próximos 7 dias*\n• Fim das inscrições · Agência Nacional de Dados · Analista de TI: em 3 dias, 23/10/2026",
+    );
+    expect(sent[0].body).toContain("*Próximas datas*\n• Prova · Agência Nacional de Dados · Analista de TI: em 26 dias, 15/11/2026 às 08:00");
+    expect(sent[0].body).toContain("*1 concurso novo para você*\n• Nota 81 · Analista de Controle Externo · Tribunal de Contas do Planalto");
+    expect(sent[0].body).toContain("A inscrição e o pagamento são sempre no site oficial da banca.");
+
+    await handleIncomingMessage(deps, message("prazos"), ctx);
+    expect(sent[1].body).toContain("*Concursos nesta semana*\n• Fim das inscrições · Agência Nacional de Dados");
+
+    const empty = fakeDeps({
+      loadSnapshot: vi.fn(async () => ({ ...snapshot, concursos: [], concursoDates: [] })),
+      loadOpenConcursoLeads: vi.fn(async () => ({ total: 0, leads: [] })),
+    });
+    await handleIncomingMessage(empty.deps, message("concursos"), ctx);
+    expect(empty.sent[0].body).toContain("Você ainda não acompanha nenhum concurso");
   });
 
   it("responde sobre uma empresa", async () => {

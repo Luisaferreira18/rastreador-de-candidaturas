@@ -94,7 +94,13 @@ export function toConcursoProfileFormValues(row: ProfileRow): ConcursoProfileFor
   };
 }
 
-export function toConcursoSearchProfile(row: ProfileRow): ConcursoSearchProfile {
+/** As colunas do perfil que a nota usa. */
+export type ConcursoProfileCriteria = Pick<
+  ProfileRow,
+  "education" | "areas" | "roles" | "spheres" | "cities" | "states" | "min_salary_cents" | "exam_boards" | "accepts_relocation"
+>;
+
+export function toConcursoSearchProfile(row: ConcursoProfileCriteria): ConcursoSearchProfile {
   return {
     education: row.education,
     areas: row.areas,

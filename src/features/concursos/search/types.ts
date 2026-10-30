@@ -1,10 +1,12 @@
 import type { DateKind, EducationLevel, Sphere } from "@/lib/concurso-options";
 
-export type NoticeSource = "dou" | "querido_diario";
+/** "exemplo": editais fictícios da conta demo, que a busca ignora. */
+export type NoticeSource = "dou" | "querido_diario" | "exemplo";
 
 export const SOURCE_LABELS: Record<NoticeSource, string> = {
   dou: "Diário Oficial da União",
   querido_diario: "Diário oficial do município (Querido Diário)",
+  exemplo: "Edital fictício da demonstração",
 };
 
 export type NoticeRole = { title: string; education: EducationLevel | null };

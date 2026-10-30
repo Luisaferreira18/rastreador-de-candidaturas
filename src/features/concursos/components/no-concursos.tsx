@@ -2,6 +2,7 @@ import { FileSearch, Landmark, Plus } from "lucide-react";
 import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
+import { LoadSampleDataButton } from "@/features/demo/components/load-sample-button";
 
 /** Estado vazio quando a pessoa ainda não cadastrou nenhum concurso. */
 export function NoConcursos({ className }: { className?: string }) {
@@ -22,6 +23,7 @@ export function NoConcursos({ className }: { className?: string }) {
           <Plus /> Novo concurso
         </Link>
       </Button>
+      <LoadSampleDataButton kind="concursos" variant="ghost" />
     </EmptyState>
   );
 }

@@ -2,6 +2,10 @@ import "server-only";
 import { z } from "zod";
 import { requireUser } from "@/features/auth/session";
 import { friendlyDbError } from "@/lib/action-result";
+import type { AgendaConcurso } from "@/features/concursos/agenda";
+import { getConcursoStage } from "@/lib/concurso-stages";
+import { todayISO } from "@/lib/format";
+import { getStage } from "@/lib/stages";
 import { createClient } from "@/lib/supabase/server";
 import type {
   Application,
@@ -9,7 +13,7 @@ import type {
   ApplicationSummary,
   StageHistoryEntry,
   Task,
-  TaskWithApplication,
+  TaskWithParent,
 } from "./types";
 
 /**
@@ -100,14 +104,17 @@ export async function getApplicationDetail(id: string): Promise<ApplicationDetai
 export type DashboardData = {
   applications: Pick<Application, "id" | "stage" | "platform" | "applied_at" | "company" | "role_title">[];
   history: Pick<StageHistoryEntry, "application_id" | "to_stage">[];
-  tasks: TaskWithApplication[];
+  /** Tarefas pendentes com prazo, das candidaturas e dos concursos. */
+  tasks: TaskWithParent[];
+  /** Concursos com o cronograma de hoje em diante (agenda do painel). */
+  concursos: AgendaConcurso[];
 };
 
 export async function getDashboardData(): Promise<DashboardData> {
   const user = await requireUser();
   const supabase = await createClient();
 
-  const [applicationsResult, historyResult, tasksResult] = await Promise.all([
+  const [applicationsResult, historyResult, tasksResult, concursosResult, datesResult] = await Promise.all([
     supabase
       .from("applications")
       .select("id, stage, platform, applied_at, company, role_title")
@@ -120,30 +127,43 @@ export async function getDashboardData(): Promise<DashboardData> {
       .eq("done", false)
       .not("due_date", "is", null)
       .order("due_date", { ascending: true }),
+    supabase.from("concursos").select("id, organ, role_title, stage").eq("user_id", user.id),
+    supabase
+      .from("concurso_dates")
+      .select("concurso_id, kind, date, time")
+      .eq("user_id", user.id)
+      .gte("date", todayISO()),
   ]);
 
   if (applicationsResult.error) throw loadError(applicationsResult.error);
   if (historyResult.error) throw loadError(historyResult.error);
   if (tasksResult.error) throw loadError(tasksResult.error);
+  if (concursosResult.error) throw loadError(concursosResult.error);
+  if (datesResult.error) throw loadError(datesResult.error);
 
   const applicationsById = new Map(applicationsResult.data.map((a) => [a.id, a]));
-  const tasks: TaskWithApplication[] = tasksResult.data.flatMap((task: Task) => {
+  const concursosById = new Map(concursosResult.data.map((c) => [c.id, c]));
+  const tasks: TaskWithParent[] = tasksResult.data.flatMap((task: Task) => {
     const application = task.application_id ? applicationsById.get(task.application_id) : undefined;
-    if (!application) return [];
-    return [
-      {
-        ...task,
-        application: {
-          id: application.id,
-          company: application.company,
-          role_title: application.role_title,
-          stage: application.stage,
-        },
-      },
-    ];
+    if (application) {
+      const parent = { href: `/candidaturas/${application.id}`, name: application.company, dot: getStage(application.stage).dot };
+      return [{ ...task, parent }];
+    }
+    const concurso = task.concurso_id ? concursosById.get(task.concurso_id) : undefined;
+    if (concurso) {
+      const parent = { href: `/concursos/${concurso.id}`, name: concurso.organ, dot: getConcursoStage(concurso.stage).dot };
+      return [{ ...task, parent }];
+    }
+    return [];
   });
 
-  return { applications: applicationsResult.data, history: historyResult.data, tasks };
+  const datesByConcurso = Map.groupBy(datesResult.data, (item) => item.concurso_id);
+  const concursos: AgendaConcurso[] = concursosResult.data.map((concurso) => ({
+    ...concurso,
+    dates: datesByConcurso.get(concurso.id) ?? [],
+  }));
+
+  return { applications: applicationsResult.data, history: historyResult.data, tasks, concursos };
 }
 
 /** Tudo do usuário para exportar em CSV. */

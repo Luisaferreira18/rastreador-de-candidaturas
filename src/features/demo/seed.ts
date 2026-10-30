@@ -1,11 +1,15 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { toConcursoSearchProfile } from "@/features/concursos/search/profile";
+import { noticeToRow, rowToNotice } from "@/features/concursos/search/rows";
+import { MIN_CONCURSO_SCORE, scoreNotice } from "@/features/concursos/search/score";
 import { extractResume } from "@/features/resume/extract";
 import { readPdfText } from "@/features/resume/pdf";
 import { RESUME_BUCKET, resumePath, toResumeRow } from "@/features/resume/resume";
 import { todayISO } from "@/lib/format";
 import type { Database } from "@/types/database";
+import { buildSampleConcursos, DEMO_CONCURSO_PROFILE, sampleNotices } from "./sample-concursos";
 import { buildSampleData } from "./sample-data";
 
 /** Currículo fictício da conta demo (também usado nos testes). */
@@ -45,16 +49,93 @@ export async function seedSampleData(supabase: Client, userId: string, today: st
 }
 
 /**
- * Apaga as candidaturas do usuário (histórico e tarefas vão junto, em cascata),
- * a caixa de entrada, as vagas sugeridas e o perfil de busca.
+ * Concursos de exemplo, com histórico, cronograma, matérias e tarefas.
+ * Funciona com o cliente do próprio usuário (RLS ativo) ou com o administrativo.
+ */
+export async function seedSampleConcursos(supabase: Client, userId: string, today: string = todayISO()) {
+  const plan = buildSampleConcursos(userId, today, () => crypto.randomUUID());
+  const ids = plan.concursos.map((concurso) => concurso.id);
+
+  const concursos = await supabase.from("concursos").insert(plan.concursos);
+  if (concursos.error) throw concursos.error;
+
+  // Como nas candidaturas: troca o registro do trigger pela linha do tempo completa.
+  const cleanup = await supabase.from("concurso_stage_history").delete().in("concurso_id", ids);
+  if (cleanup.error) throw cleanup.error;
+
+  const results = await Promise.all([
+    supabase.from("concurso_stage_history").insert(plan.history),
+    supabase.from("concurso_dates").insert(plan.dates),
+    supabase.from("concurso_subjects").insert(plan.subjects),
+    supabase.from("tasks").insert(plan.tasks),
+  ]);
+  for (const result of results) {
+    if (result.error) throw result.error;
+  }
+  return { concursos: plan.concursos.length };
+}
+
+/**
+ * Perfil de concursos da conta demo e os concursos sugeridos de exemplo.
+ *
+ * Os editais de exemplo ficam no catálogo compartilhado com a fonte
+ * "exemplo" (a busca de verdade os ignora). Só o cliente administrativo grava
+ * no catálogo: com ele (`catalog`), os editais são recriados com datas de hoje;
+ * sem ele, a função usa os que o cron da demo já gravou.
+ */
+export async function seedDemoConcursoSearch(
+  supabase: Client,
+  userId: string,
+  { catalog, today = todayISO() }: { catalog?: Client; today?: string } = {},
+) {
+  const profile = await supabase
+    .from("concurso_profiles")
+    .upsert({ ...DEMO_CONCURSO_PROFILE, user_id: userId }, { onConflict: "user_id" });
+  if (profile.error) throw profile.error;
+
+  if (catalog) {
+    const rows = sampleNotices(today).map((notice) => ({ ...noticeToRow(notice), found_at: new Date().toISOString() }));
+    const upsert = await catalog.from("concurso_notices").upsert(rows, { onConflict: "source,external_id" });
+    if (upsert.error) throw upsert.error;
+  }
+
+  const notices = await supabase.from("concurso_notices").select("*").eq("source", "exemplo");
+  if (notices.error) throw notices.error;
+
+  const searchProfile = toConcursoSearchProfile(DEMO_CONCURSO_PROFILE);
+  const leads = (notices.data ?? []).flatMap((row) => {
+    const match = scoreNotice(rowToNotice(row), searchProfile, today);
+    if (match.excluded || match.score < MIN_CONCURSO_SCORE) return [];
+    return [
+      {
+        user_id: userId,
+        notice_id: row.id,
+        role: match.role,
+        score: match.score,
+        reasons: match.reasons,
+        warnings: match.warnings,
+      },
+    ];
+  });
+  if (leads.length > 0) {
+    const inserted = await supabase
+      .from("concurso_leads")
+      .upsert(leads, { onConflict: "user_id,notice_id", ignoreDuplicates: true });
+    if (inserted.error) throw inserted.error;
+  }
+  return { leads: leads.length };
+}
+
+/**
+ * Apaga as candidaturas e os concursos do usuário (histórico, cronograma,
+ * matérias e tarefas vão junto, em cascata), a caixa de entrada, as vagas e
+ * os concursos sugeridos e os perfis de busca.
  */
 export async function clearUserData(supabase: Client, userId: string) {
-  const inbox = await supabase.from("inbox_items").delete().eq("user_id", userId);
-  if (inbox.error) throw inbox.error;
-  const leads = await supabase.from("job_leads").delete().eq("user_id", userId);
-  if (leads.error) throw leads.error;
-  const profile = await supabase.from("job_profiles").delete().eq("user_id", userId);
-  if (profile.error) throw profile.error;
+  for (const table of ["inbox_items", "job_leads", "job_profiles", "concurso_leads", "concurso_profiles", "concursos"] as const) {
+    const { error } = await supabase.from(table).delete().eq("user_id", userId);
+    if (error) throw error;
+  }
   const { error } = await supabase.from("applications").delete().eq("user_id", userId);
   if (error) throw error;
 }
@@ -157,5 +238,7 @@ export async function resetDemoAccount(admin: Client, email: string, password: s
   const result = await seedSampleData(admin, userId);
   await seedDemoJobProfile(admin, userId);
   await seedDemoResume(admin, userId);
-  return { userId, ...result };
+  const concursos = await seedSampleConcursos(admin, userId);
+  const search = await seedDemoConcursoSearch(admin, userId, { catalog: admin });
+  return { userId, ...result, ...concursos, concursoLeads: search.leads };
 }

@@ -23,7 +23,13 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await resetDemoAccount(createAdminClient(), credentials.email, credentials.password);
-    return NextResponse.json({ ok: true, applications: result.applications, tasks: result.tasks });
+    return NextResponse.json({
+      ok: true,
+      applications: result.applications,
+      tasks: result.tasks,
+      concursos: result.concursos,
+      concursoLeads: result.concursoLeads,
+    });
   } catch (error) {
     console.error("[cron/reset-demo]", error);
     return NextResponse.json({ error: "Falha ao restaurar a conta demo." }, { status: 500 });

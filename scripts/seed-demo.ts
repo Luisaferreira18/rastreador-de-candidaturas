@@ -21,7 +21,9 @@ async function main() {
 
   console.log(`Preparando a conta demo (${credentials.email})...`);
   const result = await resetDemoAccount(createAdminClient(), credentials.email, credentials.password);
-  console.log(`Pronto: ${result.applications} candidaturas e ${result.tasks} tarefas criadas.`);
+  console.log(
+    `Pronto: ${result.applications} candidaturas, ${result.tasks} tarefas, ${result.concursos} concursos e ${result.concursoLeads} concursos sugeridos.`,
+  );
 }
 
 main().catch((error) => {

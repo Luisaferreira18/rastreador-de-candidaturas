@@ -3,9 +3,11 @@
  * Todo texto vindo do usuário passa por escapeHtml no e-mail.
  */
 
+import { agendaConcursoName, agendaLine, type AgendaItem } from "@/features/concursos/agenda";
+import { dateKindLabel } from "@/lib/concurso-options";
 import { formatDate, formatDateShort, formatPercent, formatRelativeDay } from "@/lib/format";
 import { getStage } from "@/lib/stages";
-import { describeChange, type DailyReport, type ReportLead, type ReportTask } from "./build";
+import { describeChange, type DailyReport, type ReportConcursoLead, type ReportLead, type ReportTask } from "./build";
 
 export function escapeHtml(text: string): string {
   return text
@@ -44,6 +46,27 @@ function taskRowsHtml(tasks: ReportTask[], today: string, color: string): string
 </tr>`,
     )
     .join("");
+}
+
+function concursoRowsHtml(items: AgendaItem[], today: string): string {
+  return items
+    .map((item) => {
+      const color = item.urgent ? (item.days <= 1 ? COLORS.danger : COLORS.warn) : COLORS.text;
+      return `<tr>
+  <td style="padding:6px 0;border-bottom:1px solid ${COLORS.border}">
+    <div style="font-size:14px;color:${color}">${escapeHtml(dateKindLabel(item.kind))}</div>
+    <div style="font-size:12px;color:${COLORS.muted}">${escapeHtml(agendaConcursoName(item))}</div>
+  </td>
+  <td style="padding:6px 0 6px 12px;border-bottom:1px solid ${COLORS.border};text-align:right;white-space:nowrap;font-size:13px;color:${color}">
+    ${escapeHtml(capitalize(formatRelativeDay(item.date, today)))}<br><span style="font-size:12px;color:${COLORS.muted}">${formatDate(item.date)}${item.time ? ` às ${item.time}` : ""}</span>
+  </td>
+</tr>`;
+    })
+    .join("");
+}
+
+function concursoLeadName(lead: ReportConcursoLead): string {
+  return lead.role ? `${lead.role} · ${lead.organ}` : lead.organ;
 }
 
 function section(title: string, body: string): string {
@@ -97,6 +120,34 @@ export function renderReportEmail(report: DailyReport, appUrl: string): { subjec
     );
   }
 
+  if (report.concursoDeadlines.length) {
+    parts.push(
+      section(
+        "Concursos nesta semana",
+        `<table role="presentation" width="100%" cellspacing="0" cellpadding="0">${concursoRowsHtml(report.concursoDeadlines, t)}</table><p style="margin:8px 0 0;font-size:12px;color:${COLORS.muted}">A inscrição e o pagamento são sempre no site oficial da banca.</p>`,
+      ),
+    );
+  }
+
+  if (report.newConcursoLeads.length) {
+    const items = report.newConcursoLeads
+      .map(
+        (lead) =>
+          `<li style="margin:6px 0"><a href="${escapeHtml(lead.url)}" style="color:${COLORS.accent};text-decoration:none">${escapeHtml(concursoLeadName(lead))}</a> <span style="color:${COLORS.muted}">· nota ${lead.score}</span></li>`,
+      )
+      .join("");
+    const more =
+      report.newConcursoLeadsCount > report.newConcursoLeads.length
+        ? `E mais ${report.newConcursoLeadsCount - report.newConcursoLeads.length}. `
+        : "";
+    parts.push(
+      section(
+        "Concursos novos para você",
+        `<ul style="margin:0;padding-left:18px;font-size:14px;color:${COLORS.text}">${items}</ul><p style="margin:8px 0 0;font-size:13px;color:${COLORS.muted}">${more}<a href="${escapeHtml(appUrl)}/concursos/sugeridos" style="color:${COLORS.accent}">Ver todos e acompanhar</a></p>`,
+      ),
+    );
+  }
+
   if (report.stale.length) {
     const items = report.stale
       .map(
@@ -144,6 +195,11 @@ export function leadLines(leads: readonly ReportLead[]): string[] {
   return leads.flatMap((lead) => [`• ${lead.score}% · ${lead.title} · ${lead.company}`, `  ${lead.url}`]);
 }
 
+/** "• Nota 88 · Analista em TI · Agência Nacional de Dados" e o link na linha de baixo. */
+export function concursoLeadLines(leads: readonly ReportConcursoLead[]): string[] {
+  return leads.flatMap((lead) => [`• Nota ${lead.score} · ${concursoLeadName(lead)}`, `  ${lead.url}`]);
+}
+
 function taskLines(tasks: ReportTask[], today: string): string[] {
   return tasks.map((task) => `• ${task.title} · ${task.company}: ${formatRelativeDay(task.dueDate, today)}, ${formatDate(task.dueDate)}`);
 }
@@ -169,6 +225,16 @@ export function renderReportText(report: DailyReport, appUrl: string, { bold = f
     lines.push("", b("Vagas novas para você"), ...leadLines(report.newLeads));
     if (report.newLeadsCount > report.newLeads.length) lines.push(`E mais ${report.newLeadsCount - report.newLeads.length}.`);
     lines.push(`Ver todas: ${appUrl}/vagas`);
+  }
+  if (report.concursoDeadlines.length) {
+    lines.push("", b("Concursos nesta semana"), ...report.concursoDeadlines.map((item) => agendaLine(item, t)));
+  }
+  if (report.newConcursoLeads.length) {
+    lines.push("", b("Concursos novos para você"), ...concursoLeadLines(report.newConcursoLeads));
+    if (report.newConcursoLeadsCount > report.newConcursoLeads.length) {
+      lines.push(`E mais ${report.newConcursoLeadsCount - report.newConcursoLeads.length}.`);
+    }
+    lines.push(`Ver todos: ${appUrl}/concursos/sugeridos`);
   }
   if (report.stale.length) {
     lines.push("", b("Sem novidades há um tempo"), ...report.stale.map((item) => `• ${item.company} (${getStage(item.stage).label} há ${item.days} dias)`));

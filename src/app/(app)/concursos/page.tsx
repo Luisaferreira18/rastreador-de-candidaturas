@@ -1,9 +1,15 @@
-import { FileSearch, Plus } from "lucide-react";
+import { CalendarPlus, Download, FileSearch, MoreHorizontal, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConcursosNav } from "@/features/concursos/components/concursos-nav";
 import { ConcursosTable } from "@/features/concursos/components/concursos-table";
@@ -31,6 +37,25 @@ export default function ConcursosPage() {
                 <Plus /> Novo concurso
               </Link>
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon-sm" aria-label="Exportar">
+                  <MoreHorizontal />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-60">
+                <DropdownMenuItem asChild>
+                  <a href="/api/export/concursos" download>
+                    <Download /> Exportar concursos em CSV
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href="/api/concursos/agenda" download>
+                    <CalendarPlus /> Baixar a agenda (.ics)
+                  </a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         }
       />

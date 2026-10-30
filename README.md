@@ -5,7 +5,8 @@
 Sistema web para acompanhar candidaturas a vagas (estágio, trainee, CLT, PJ, temporário ou freela),
 do "quero me candidatar" até a proposta.
 Tem quadro Kanban com arrastar e soltar, linha do tempo de cada vaga, próximos passos com prazo e um
-painel com o funil e a taxa de resposta.
+painel com o funil e a taxa de resposta. Também acompanha **concursos públicos**: cronograma,
+contagem até a prova, matérias, leitor de edital e busca diária de editais abertos.
 
 > **Demonstração:** [rastreador-de-candidaturas.vercel.app](https://rastreador-de-candidaturas.vercel.app). Clique em **Explorar a demonstração**: a conta já vem com dados de exemplo, e eles voltam ao original todo dia.
 
@@ -35,9 +36,10 @@ back-end, banco relacional com regras de segurança por usuário, login, testes 
   sugestões ("Nuvem Pay → Entrevista técnica, prazo 23/10"), e as inequívocas (confirmação de
   inscrição, reprovação clara) são aplicadas sozinhas. Também dá para **colar uma mensagem** do
   WhatsApp ou do LinkedIn, ou compartilhar direto pelo Android. Veja [Automação gratuita](#automação-gratuita).
-- **Resumo diário por e-mail** (prazos, o que mudou, vagas paradas, números) e **assistente no
-  WhatsApp** que responde "resumo", "prazos", "andamento" ou o nome de uma empresa, e transforma
-  mensagens encaminhadas de recrutadores em sugestões. Tudo grátis.
+- **Resumo diário por e-mail** (prazos, o que mudou, vagas paradas, datas dos concursos, vagas e
+  concursos novos, números) e **assistente no WhatsApp** que responde "resumo", "prazos",
+  "andamento", "concursos" ou o nome de uma empresa, e transforma mensagens encaminhadas de
+  recrutadores em sugestões. Tudo grátis.
 - **Caça-vagas diário:** a pessoa diz o que procura (cargos, cidade, modelo, tipo de vaga,
   remuneração mínima, palavras-chave do currículo) e todo dia o app busca vagas abertas na Gupy e
   nas páginas de carreira de empresas (Greenhouse e Lever). Cada vaga ganha uma **nota de
@@ -47,12 +49,20 @@ back-end, banco relacional com regras de segurança por usuário, login, testes 
 - **Currículo em PDF:** o app lê as habilidades, os idiomas, o curso e a cidade, usa as
   habilidades na nota das vagas, avisa quando a vaga pede um idioma acima do que o currículo diz e
   sugere cargos e tipo de vaga para o perfil. Veja [Currículo](#currículo).
+- **Concursos públicos:** cadastro com cronograma, matérias e próximos passos, quadro por etapa,
+  contagem até a prova, **leitor de edital** (cola o texto ou o link e o app preenche órgão, cargo,
+  banca, salário e datas) e **caça-concursos** diário no Diário Oficial da União e nos diários
+  oficiais das cidades. O app só leva ao site oficial: nunca faz a inscrição nem guarda CPF ou dados
+  de pagamento. Veja [Concursos públicos](#concursos-públicos).
 - **Painel** com total, em andamento, taxa de resposta, aprovações, funil, aprovação por etapa,
-  candidaturas por plataforma, ritmo semanal e **próximos prazos** (atrasados, hoje e próximos 7 dias).
-- **Exportar tudo em CSV**, pronto para abrir no Excel em português.
+  candidaturas por plataforma, ritmo semanal, **próximos prazos** (atrasados, hoje e próximos 7
+  dias, de candidaturas e concursos) e a **agenda dos concursos**, com alerta de inscrição e boleto
+  vencendo em 7 dias.
+- **Exportar em CSV** as candidaturas e os concursos, pronto para abrir no Excel em português, e o
+  **cronograma em .ics** para o Google Agenda ou o calendário do celular.
 - **Dados de exemplo** com um clique e **conta de demonstração** que se restaura sozinha todo dia.
 - **Atalhos de teclado:** `N` nova candidatura, `/` buscar, `Ctrl+K` paleta de comandos, `G` e
-  depois `P`/`Q`/`L`/`C`/`V` para navegar, `?` mostra todos os atalhos.
+  depois `P`/`Q`/`L`/`C`/`V`/`O` para navegar, `?` mostra todos os atalhos.
 - **Modo claro e escuro**, avisos leves (toast), estados vazios com ação e layout responsivo: no
   celular o Kanban vira uma lista agrupada por etapa.
 
@@ -91,6 +101,12 @@ auth.users ──┬──< applications ──┬──< stage_history   (preen
              ├──  job_profiles                         (perfil do caça-vagas)
              ├──< job_leads                            (vagas sugeridas, com nota)
              ├──  resumes                              (o que foi lido do currículo)
+             ├──< concursos ──┬──< concurso_stage_history (preenchida por trigger)
+             │                ├──< concurso_dates           (cronograma)
+             │                ├──< concurso_subjects        (matérias)
+             │                └──< tasks                    (a mesma tabela das candidaturas)
+             ├──  concurso_profiles                    (perfil do caça-concursos)
+             ├──< concurso_leads >── concurso_notices  (sugestões; o catálogo é compartilhado)
              └── (user_id em todas as tabelas, para o RLS)
 ```
 
@@ -100,7 +116,8 @@ auth.users ──┬──< applications ──┬──< stage_history   (preen
 - **stage_history**: cada mudança de etapa (de → para, com data e hora). Quem grava é um **trigger
   no PostgreSQL**, então nenhuma mudança escapa do histórico, venha do Kanban, do formulário ou de
   outro cliente.
-- **tasks**: próximos passos com prazo opcional, ligados a uma candidatura.
+- **tasks**: próximos passos com prazo opcional, ligados a uma candidatura **ou** a um concurso (uma
+  regra `CHECK` exige exatamente um dos dois). Assim o painel lê todos os prazos de um lugar só.
 - **inbox_items**: sugestões vindas de e-mails ou de mensagens coladas (tipo, etapa sugerida,
   empresa, cargo, prazo, trecho da mensagem e o que foi feito com ela).
 - **user_settings**: hash do token pessoal do e-mail e a preferência de aplicar sozinho.
@@ -111,9 +128,25 @@ auth.users ──┬──< applications ──┬──< stage_history   (preen
   duas vezes, nem depois de descartada.
 - **resumes**: um por pessoa. Guarda onde está o PDF e só o que a busca usa (habilidades, idiomas,
   curso, situação do curso, cidade e sugestões). O texto completo do currículo não é guardado.
+- **concursos**: órgão, cargo, banca, esfera, escolaridade, área, salário em centavos, vagas,
+  cadastro reserva, cidade e UF, links do edital e da inscrição, observações, prioridade, etapa e
+  posição no quadro. **concurso_stage_history** guarda as mudanças de etapa (por trigger, como nas
+  candidaturas).
+- **concurso_dates**: o cronograma (início e fim das inscrições, pedido de isenção, vencimento do
+  boleto, prova, gabarito, recurso, resultado e validade), com hora e observação opcionais.
+- **concurso_subjects**: matérias com peso, número de questões, situação (não estudado, estudado,
+  revisado) e ordem.
+- **concurso_profiles**: o que a pessoa procura em concursos (escolaridade, áreas, cargos, esferas,
+  cidades, estados, salário mínimo, bancas preferidas, se aceita mudar de cidade) e o resumo da
+  última busca.
+- **concurso_notices**: o **catálogo compartilhado** de editais de abertura encontrados. É o mesmo
+  para todo mundo (o arquivo do DOU é grande e igual para todos), só o cron grava nele e quem está
+  logado só lê. **concurso_leads** é a sugestão de cada pessoa, com nota, motivos e avisos, única
+  por pessoa e edital: o mesmo edital nunca é sugerido duas vezes.
 
 As etapas são fixas e definidas em um só lugar ([src/lib/stages.ts](src/lib/stages.ts)): nome, cor,
-ordem no funil e tipo. As mesmas chaves estão travadas no banco por restrições `CHECK`.
+ordem no funil e tipo. As mesmas chaves estão travadas no banco por restrições `CHECK`. As etapas
+dos concursos ficam em [src/lib/concurso-stages.ts](src/lib/concurso-stages.ts), do mesmo jeito.
 
 ### Segurança
 
@@ -136,6 +169,10 @@ ordem no funil e tipo. As mesmas chaves estão travadas no banco por restriçõe
   enviar e apagar currículo é recusado pelas próprias regras do banco e do Storage (uma função em
   `private`, fora da API, diz se a conta é protegida), porque a conta é compartilhada.
 - O CSV exportado neutraliza "injeção de fórmula" (`=`, `+`, `-`, `@` no início de um campo).
+- **Concursos:** o app nunca faz a inscrição nem guarda CPF, documentos ou dados de pagamento. O
+  botão "Ir para a inscrição" só abre o site oficial. O leitor de edital baixa links só por
+  `http(s)`, recusa endereços internos (inclusive depois de redirecionar, porque confere o IP na
+  hora de conectar), segue no máximo 3 redirecionamentos e para em 10 MB ou 20 segundos.
 - Os e-mails entram por uma função do banco (`inbox_ingest`) que só aceita um **token pessoal**:
   o banco guarda apenas o hash (SHA-256) dele e grava só na conta dona do token. O Supabase avisa
   que essa função pode ser chamada sem login. Isso é intencional: quem chama é o script do Google,
@@ -165,7 +202,10 @@ src/
   app/                      Rotas (App Router)
     (auth)/                 login, cadastro, recuperar e redefinir senha
     (app)/                  painel, quadro, lista, caixa-de-entrada, vagas, conexoes, candidaturas/[id], nova, editar
-    api/export/             download do CSV
+    (app)/concursos/        lista, quadro, sugeridos, perfil, ler-edital, novo, [id], [id]/editar
+    api/export/             download do CSV (candidaturas e /concursos)
+    api/concursos/          edital (leitor), buscar ("Buscar agora") e agenda (.ics)
+    api/cron/concursos/     busca diária de concursos (DOU e Querido Diário)
     api/cron/reset-demo/    restauração diária da conta demo
     api/cron/vagas/         busca diária de vagas para todos os perfis
     api/vagas/buscar/       busca de quem está logado (ao abrir o app e no botão "Buscar agora")
@@ -185,6 +225,8 @@ src/
     whatsapp/               assistente: comandos, vinculação por código, webhook
     job-search/             caça-vagas: fontes (Gupy, Greenhouse, Lever), nota, bolsa e benefícios, busca
     resume/                 currículo: leitura do PDF, habilidades, idiomas, curso, sugestões
+    concursos/              concursos: cronograma, matérias, leitor de edital, agenda, .ics, CSV
+    concursos/search/       caça-concursos: DOU, Querido Diário, catálogo, nota, perfil
   components/               Componentes compartilhados (app-shell, ui do shadcn, etc.)
   lib/                      Supabase, etapas, opções, formatação pt-BR, CSV, erros
   types/database.ts         Tipos do banco
@@ -213,9 +255,14 @@ assets/demo/                Currículo fictício da conta demo (também usado no
    8. `20261027000000_protect_demo_account.sql`
    9. `20261028000000_job_lead_details.sql`
    10. `20261028010000_resumes.sql` (cria também o bucket `curriculos` do Storage)
+   11. `20261029000000_concursos.sql`
+   12. `20261029010000_concurso_search.sql`
+   13. `20261029020000_concurso_report.sql`
 
    Confira em **Table Editor** se apareceram `applications`, `stage_history`, `tasks`,
-   `inbox_items`, `user_settings`, `job_profiles` e `job_leads`, todas com o selo de RLS ativado.
+   `inbox_items`, `user_settings`, `job_profiles`, `job_leads`, `concursos`, `concurso_dates`,
+   `concurso_subjects`, `concurso_profiles`, `concurso_notices` e `concurso_leads`, todas com o selo
+   de RLS ativado.
    > Se você usa a CLI do Supabase: `npx supabase link --project-ref <id>` e `npx supabase db push`.
 3. **Copie as chaves** para o `.env.local` (copie o [.env.example](.env.example) primeiro):
 
@@ -223,7 +270,7 @@ assets/demo/                Currículo fictício da conta demo (também usado no
    | --- | --- |
    | `NEXT_PUBLIC_SUPABASE_URL` | **Project Settings → Data API → Project URL** (ou o botão **Connect** no topo) |
    | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | **Project Settings → API Keys → Publishable key** (começa com `sb_publishable_`) |
-   | `SUPABASE_SECRET_KEY` | **Project Settings → API Keys → Secret keys** (começa com `sb_secret_`). Só é necessária para a conta demo, para o assistente do WhatsApp e para a busca diária de vagas pelo cron |
+   | `SUPABASE_SECRET_KEY` | **Project Settings → API Keys → Secret keys** (começa com `sb_secret_`). Só é necessária para a conta demo, para o assistente do WhatsApp, para a busca diária de vagas pelo cron e para o catálogo do caça-concursos |
 
 4. **Configure os endereços de retorno:** em **Authentication → URL Configuration**:
    - **Site URL:** `http://localhost:3000` (troque pelo endereço da Vercel depois do deploy).
@@ -266,9 +313,15 @@ assets/demo/                Currículo fictício da conta demo (também usado no
 6. O script e o cron também colocam na demo um currículo fictício
    ([assets/demo/curriculo-demo.pdf](assets/demo/curriculo-demo.pdf)), lido como qualquer currículo
    enviado. Os visitantes não conseguem trocar nem apagar esse currículo.
+7. A demo também ganha 5 concursos de órgãos fictícios (um com inscrição e boleto vencendo nesta
+   semana, um com prova daqui a algumas semanas e matérias pela metade, um com prova feita, um
+   encerrado e um só acompanhado), o perfil de concursos e 3 editais fictícios sugeridos. Os editais
+   ficam no catálogo com a fonte `exemplo`, que a busca de verdade ignora, e todos os links são de
+   `example.com`.
 
 Qualquer outra conta pode carregar os mesmos dados de exemplo pelo botão **Carregar dados de
-exemplo**, que aparece quando a conta está vazia.
+exemplo**, que aparece quando a conta está vazia (na página de concursos, o botão carrega os
+concursos de exemplo).
 
 ## Automação gratuita
 
@@ -309,7 +362,8 @@ que o Google auditasse o app (processo pago) para ler o Gmail de outras pessoas.
 O mesmo script do Google manda, todo dia no horário escolhido (padrão: 7h), um resumo para o Gmail
 da própria pessoa: prazos atrasados, de hoje e da semana; o que mudou desde ontem; sugestões
 esperando na caixa de entrada; vagas em andamento sem novidade há 14 dias ou mais; as **vagas
-novas do caça-vagas**; e os números da semana. A prévia aparece na página **Conexões**. O envio usa a cota gratuita de e-mails da própria
+novas do caça-vagas**; as **datas dos concursos na semana** (fim das inscrições, boleto, prova...)
+e os **concursos novos sugeridos**; e os números da semana. A prévia aparece na página **Conexões**. O envio usa a cota gratuita de e-mails da própria
 conta Google, então não custa nada.
 
 ### Assistente no WhatsApp (opcional)
@@ -319,7 +373,8 @@ não cobra até 1.000 respostas por mês por número (regra em vigor desde 1º/1
 empresa inicia, como um relatório enviado sozinho todo dia, são cobradas. Por isso o resumo
 automático vai por e-mail e o WhatsApp funciona sob demanda.
 
-O que a pessoa pode mandar: `resumo`, `prazos`, `andamento`, `sugestões`, `vagas`, o nome de uma empresa
+O que a pessoa pode mandar: `resumo`, `prazos`, `andamento`, `sugestões`, `vagas`, `concursos`
+(alertas de inscrição e boleto da semana, as próximas datas e os concursos novos), o nome de uma empresa
 ("como está a Nuvem Pay?") ou uma **mensagem encaminhada de recrutador**, que vira sugestão na caixa
 de entrada. Para conectar, ela gera um código em **Conexões** e manda `vincular CÓDIGO` para o
 assistente, o que prova que o número é dela. Mandar `desvincular` desconecta.
@@ -433,6 +488,86 @@ fica no bucket privado e pode ser apagado a qualquer momento, junto com o que fo
 escaneado (só imagem) não tem texto: o app avisa e pede para exportar de novo pelo Word ou pelo
 Google Docs.
 
+## Concursos públicos
+
+Concurso não segue as etapas de uma vaga (não tem entrevista nem proposta), então tem um módulo
+próprio, no menu **Concursos** (atalho `G` e depois `O`), com o mesmo padrão das candidaturas:
+lista com filtros, quadro Kanban, página de detalhe, linha do tempo e próximos passos.
+
+**Etapas:** Acompanhando · Edital publicado · Inscrição feita · Taxa paga · Prova marcada · Prova
+feita · Resultado · Aprovação · Nomeação · Sem aprovação · Desisti. Os nomes falam da etapa, não da
+pessoa ("Inscrição feita", e não "Inscrita").
+
+**Página do concurso:** cronograma em linha do tempo (o que já passou fica apagado, inscrição e
+boleto vencendo em 7 dias ficam em destaque), **contagem até a prova**, matérias com barra de
+progresso pelo peso de cada uma, próximos passos, histórico, **Ir para a inscrição** (abre o site
+oficial) e **Adicionar à agenda**, que baixa o cronograma em `.ics` com lembrete na véspera. No
+celular, basta abrir o arquivo; no Google Agenda pelo computador, use **Configurações → Importar e
+exportar**. Na lista, o menu ao lado de "Novo concurso" exporta os concursos em CSV e a agenda de
+todos eles.
+
+**Leitor de edital** (**Ler edital**): a pessoa cola o texto ou o link do edital (PDF, página do
+órgão ou do Diário Oficial) e o app preenche órgão, cargos, banca, esfera, escolaridade, salário,
+taxa, vagas, cadastro reserva, local, links e o cronograma. É por regras, sem IA e sem custo
+([src/features/concursos/notice-parser.ts](src/features/concursos/notice-parser.ts)), testado com
+trechos reais de editais do DOU. A pessoa confere tudo antes de salvar. Sites que só funcionam com
+JavaScript (como o do Cebraspe) não entregam o texto: o app avisa e pede o link do PDF.
+
+### Caça-concursos
+
+No **Perfil de concursos**, a pessoa diz a escolaridade, as áreas e os cargos que interessam, as
+esferas, as cidades (no formato `Cidade/UF`), os estados, o salário mínimo, as bancas preferidas e
+se aceita mudar de cidade. O app procura **editais de abertura** e mostra os que combinam em
+**Concursos sugeridos**, com nota, motivos e destaque para inscrições que terminam em até 7 dias.
+**Acompanhar** cria o concurso com o cronograma já preenchido; **Descartar** tira a sugestão para
+sempre.
+
+**Fontes:**
+
+| Fonte | Como o app lê | Cadastro |
+| --- | --- | --- |
+| **Diário Oficial da União, Seção 3** pelo [INLABS](https://inlabs.in.gov.br) | Baixa o ZIP de XML do dia e separa as matérias do tipo "Edital" que abrem concurso (extratos, homologações e retificações ficam de fora) | **Precisa de conta**, gratuita e pessoal: crie em inlabs.in.gov.br e preencha `INLABS_EMAIL` e `INLABS_PASSWORD` (veja o [.env.example](.env.example)) |
+| **DOU pela página de Dados Abertos** da Imprensa Nacional | O mesmo XML, num ZIP por mês (cerca de 60 MB), atualizado todo dia | Nenhum. É a reserva automática quando o INLABS não está configurado ou está fora do ar |
+| **[Querido Diário](https://queridodiario.ok.org.br)** (Open Knowledge Brasil) | API pública com os diários oficiais das prefeituras. O app busca "concurso público" e "edital" nas cidades dos perfis e aceita só trechos de edital de abertura (nomeações e licitações ficam de fora) | Nenhum |
+
+**Cobertura do Querido Diário em Minas Gerais** (conferida em 27/10/2026): 55 cidades aparecem na
+lista, mas só 20 têm diários. Estão em dia Betim, Campo Belo, Candeias, Carmo da Cachoeira, Carmo do
+Rio Claro, Contagem, Crucilândia, Itajubá, Itaúna, Januária, Juatuba, Nova Serrana, Onça de
+Pitangui, Piranguinho, Salinas, Taiobeiras, Uberaba e Várzea da Palma. Belo Horizonte parou em
+25/03/2026 e Uberlândia em 05/03/2026. Outras 35 (entre elas Juiz de Fora, Montes Claros, Ipatinga,
+Divinópolis e Sete Lagoas) estão listadas sem nenhum diário. A página do perfil mostra a situação de
+cada cidade da pessoa.
+
+**O que fica de fora, de propósito:**
+- **Sites das bancas:** só seriam lidos com termos de uso que permitam ou com RSS oficial, e nenhuma
+  passou. Os termos da FGV proíbem ferramentas automatizadas e a reprodução do conteúdo; o IBFC
+  bloqueia acesso automático; Cebraspe, Fundep, Vunesp e Consulplan não publicam termos de uso nem
+  RSS (o `robots.txt` liberar robôs não é autorização para usar os dados).
+- **PCI Concursos e outros agregadores**, que proíbem copiar os dados.
+- **Concursos estaduais e de cidades fora do Querido Diário** entram pelo cadastro manual e pelo
+  **Ler edital**.
+
+**Nota de compatibilidade** (regras em [src/features/concursos/search/score.ts](src/features/concursos/search/score.ts),
+sem IA): cargo e área 40 pontos, escolaridade 20, local 20, salário 10, banca preferida 10. Ficam
+de fora, em vez de ganhar nota baixa: inscrições encerradas, esfera fora do perfil, escolaridade
+acima da pessoa e outra cidade ou estado para quem não aceita mudar. Salário abaixo do mínimo vira
+aviso. Só entram editais com nota a partir de 55, no máximo 30 novos por busca.
+
+**Quando roda:**
+- **Todo dia cedo**, pelo Cron da Vercel (`/api/cron/concursos`, às 6h de Brasília): lê o DOU uma
+  vez, consulta o Querido Diário nas cidades de todos os perfis, grava no catálogo e dá a nota para
+  cada perfil. Precisa da `SUPABASE_SECRET_KEY`, porque só o cron grava no catálogo.
+- **Ao abrir Concursos sugeridos**, se a última busca foi há mais de 20 horas, e no botão **Buscar
+  agora**, no máximo uma vez a cada 2 minutos. Sem a chave secreta, essas buscas dão a nota só com o
+  catálogo que já existe.
+
+**No resto do app:** a agenda dos concursos aparece no **painel** (alertas de inscrição, isenção e
+boleto vencendo em 7 dias, e as próximas datas), as tarefas dos concursos entram em **Próximos
+prazos**, e o **resumo diário** e o comando `concursos` do WhatsApp trazem os prazos da semana e os
+concursos novos. O link **Quais órgãos federais mais abrem vagas?** leva ao
+[Radar de carreira](https://radar-carreira-dados.vercel.app/concursos), outro projeto com dados
+públicos.
+
 ## Rodar localmente
 
 Requisitos: Node.js 20.9 ou mais novo e um projeto no Supabase (seção acima).
@@ -484,6 +619,14 @@ Os testes cobrem as partes que mais importam:
   senha oficial antes de redefini-la, nasce protegida quando é criada, não segue adiante se a
   proteção falhar e recoloca o currículo fictício. Com `SUPABASE_INTEGRATION=1 npm test`, um teste extra entra na demo de verdade
   com a chave pública, como um visitante, e confere que `updateUser` não troca senha nem e-mail.
+- **Concursos:** o leitor de edital com trechos reais de cinco editais do DOU (datas em tabela, por
+  extenso e em intervalos, datas de leis que não são do cronograma, cargos, banca, salário, taxa e
+  vagas) e a rota que baixa o link (endereços internos recusados, PDF e página do DOU); a leitura do
+  XML real do DOU e de uma resposta real do Querido Diário salvos em arquivos (nomes e CPFs
+  mascarados); a nota e cada motivo de exclusão; mudança de etapa com desfazer; dias até a prova;
+  progresso das matérias; a agenda (alertas que somem quando a inscrição já foi feita ou a taxa
+  paga); o `.ics` (fuso, dia inteiro, lembretes, linhas de até 75 bytes); o CSV; e os concursos e
+  sugestões de exemplo da demo.
 - Formatação brasileira (datas, fuso de São Paulo, reais), CSV, filtros da lista e dados de exemplo.
 
 O [CI](.github/workflows/ci.yml) roda `npm ci`, lint, testes e build a cada push e pull request,
@@ -497,7 +640,8 @@ com variáveis de ambiente falsas (o build não acessa o Supabase).
 3. Em **Environment Variables**, adicione as mesmas variáveis do `.env.local`:
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (obrigatórias)
    - `NEXT_PUBLIC_SITE_URL` = `https://SEU-APP.vercel.app`
-   - `SUPABASE_SECRET_KEY` (conta demo, assistente do WhatsApp e busca diária de vagas)
+   - `SUPABASE_SECRET_KEY` (conta demo, assistente do WhatsApp, busca diária de vagas e catálogo de concursos)
+   - `INLABS_EMAIL`, `INLABS_PASSWORD` (opcionais: o DOU pelo INLABS no caça-concursos)
    - `DEMO_EMAIL`, `DEMO_PASSWORD` (conta demo)
    - `CRON_SECRET`: um valor aleatório longo (por exemplo, gerado com `openssl rand -hex 32`)
    - `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=true` (se configurou o Google)
@@ -506,8 +650,8 @@ com variáveis de ambiente falsas (o build não acessa o Supabase).
 5. Com o endereço final em mãos, volte ao Supabase (**Authentication → URL Configuration**) e
    coloque-o como **Site URL**, com `https://SEU-APP.vercel.app/auth/callback` nas **Redirect
    URLs**. Se usa Google, adicione o domínio também nas origens autorizadas do Google Cloud.
-6. O arquivo [vercel.json](vercel.json) já agenda os dois crons diários: a restauração da conta
-   demo e a busca de vagas. Como o `CRON_SECRET` está definido, a Vercel envia esse valor no
+6. O arquivo [vercel.json](vercel.json) já agenda os três crons diários: a restauração da conta
+   demo, a busca de vagas e a busca de concursos. Como o `CRON_SECRET` está definido, a Vercel envia esse valor no
    cabeçalho e as rotas aceitam a chamada. O plano grátis da Vercel permite crons uma vez por dia.
    O mesmo arquivo coloca o servidor em São Paulo (`gru1`), perto do banco do Supabase: se o seu
    projeto do Supabase estiver em outra região, troque por uma próxima dele.
@@ -525,6 +669,10 @@ com variáveis de ambiente falsas (o build não acessa o Supabase).
   as métricas continuariam usando.
 - **Cache Components (Next.js 16):** a moldura das páginas (menu, títulos) é pré-renderizada e
   aparece na hora; os dados do usuário chegam por streaming, com esqueletos no lugar.
+- **Concursos em tabelas próprias**, e não como um tipo de candidatura: as etapas, o cronograma e as
+  matérias não cabem no modelo de vaga, e o funil das candidaturas continuaria misturado. O que é
+  igual (Kanban, linha do tempo, tarefas) é reaproveitado: o quadro é genérico e as tarefas têm
+  `application_id` ou `concurso_id`.
 - **Currículo lido por regras, sem IA:** grátis, explicável e funciona na demo e no CI sem nenhuma
   chave. Uma IA entenderia currículos mais variados, mas precisaria de uma chave paga e mandaria o
   texto do currículo para fora. A leitura fica numa função só (`extractResume`), fácil de trocar.

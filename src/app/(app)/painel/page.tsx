@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NoApplications } from "@/features/applications/components/no-applications";
-import { getDashboardData } from "@/features/applications/queries";
+import { getDashboardData, type DashboardData } from "@/features/applications/queries";
+import { concursoAgenda } from "@/features/concursos/agenda";
+import { ConcursoAgendaCard } from "@/features/dashboard/components/concurso-agenda";
 import { ConversionList } from "@/features/dashboard/components/conversion-list";
 import { FunnelChart } from "@/features/dashboard/components/funnel-chart";
 import { PlatformBars } from "@/features/dashboard/components/platform-bars";
@@ -24,7 +26,7 @@ export default function DashboardPage() {
     <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-6">
       <PageHeader
         title="Painel"
-        description="Como está a sua busca por vagas, em números."
+        description="Como está a sua busca por vagas e concursos, em números."
         actions={
           <Button asChild size="sm">
             <Link href="/candidaturas/nova">
@@ -42,9 +44,23 @@ export default function DashboardPage() {
 
 async function DashboardContent() {
   const data = await getDashboardData();
-  if (data.applications.length === 0) return <NoApplications />;
-
   const today = todayISO();
+  const concursos =
+    data.concursos.length > 0 ? <ConcursoAgendaCard agenda={concursoAgenda(data.concursos, today)} today={today} /> : null;
+
+  if (data.applications.length === 0) {
+    if (!concursos) return <NoApplications />;
+    return (
+      <div className="space-y-6">
+        {concursos}
+        <div className="grid items-start gap-6 lg:grid-cols-[380px_minmax(0,1fr)]">
+          <DeadlinesCard data={data} today={today} />
+          <NoApplications />
+        </div>
+      </div>
+    );
+  }
+
   const metrics = computeDashboardMetrics(data.applications, data.history);
   const weekly = weeklyApplications(data.applications, today);
 
@@ -80,6 +96,8 @@ async function DashboardContent() {
           }
         />
       </div>
+
+      {concursos}
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="space-y-6">
@@ -135,17 +153,23 @@ async function DashboardContent() {
           </div>
         </div>
 
-        <Card className="lg:sticky lg:top-6">
-          <CardHeader>
-            <CardTitle>Próximos prazos</CardTitle>
-            <CardDescription>Tarefas atrasadas e dos próximos 7 dias.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <UpcomingDeadlines tasks={data.tasks} today={today} />
-          </CardContent>
-        </Card>
+        <DeadlinesCard data={data} today={today} className="lg:sticky lg:top-6" />
       </div>
     </div>
+  );
+}
+
+function DeadlinesCard({ data, today, className }: { data: DashboardData; today: string; className?: string }) {
+  return (
+    <Card className={className}>
+      <CardHeader>
+        <CardTitle>Próximos prazos</CardTitle>
+        <CardDescription>Tarefas atrasadas e dos próximos 7 dias, de candidaturas e concursos.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <UpcomingDeadlines tasks={data.tasks} today={today} />
+      </CardContent>
+    </Card>
   );
 }
 

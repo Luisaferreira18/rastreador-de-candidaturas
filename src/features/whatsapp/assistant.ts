@@ -8,12 +8,12 @@
  * conversa sozinho.
  */
 
+import { agendaLine, concursoAgenda } from "@/features/concursos/agenda";
 import { companyKey } from "@/features/inbox/plan";
 import { normalize, parseMessage } from "@/features/inbox/parser";
 import { KIND_INFO, type InboxKind, type ParsedMessage } from "@/features/inbox/types";
-import { buildDailyReport, type ReportSnapshot } from "@/features/report/build";
-import type { ReportLead } from "@/features/report/build";
-import { leadLines, renderReportText } from "@/features/report/render";
+import { buildDailyReport, type ReportConcursoLead, type ReportLead, type ReportSnapshot } from "@/features/report/build";
+import { concursoLeadLines, leadLines, renderReportText } from "@/features/report/render";
 import { diffDaysISO, formatDate, formatRelativeDay, timestampToISODate } from "@/lib/format";
 import { STAGES, getStage, isActiveStage } from "@/lib/stages";
 import { extractLinkCode, hashLinkCode } from "./link-code";
@@ -32,6 +32,8 @@ export type AssistantDeps = {
   createSuggestion(userId: string, parsed: ParsedMessage, text: string): Promise<void>;
   /** Vagas sugeridas ainda não vistas: as 5 de nota mais alta e o total. */
   loadOpenLeads(userId: string): Promise<{ total: number; leads: ReportLead[] }>;
+  /** Concursos sugeridos ainda não vistos: os 5 de nota mais alta e o total. */
+  loadOpenConcursoLeads(userId: string): Promise<{ total: number; leads: ReportConcursoLead[] }>;
   send(to: string, body: string): Promise<void>;
 };
 
@@ -52,6 +54,7 @@ export function menuText(name: string | null, appUrl: string): string {
     "• *andamento*: vagas em andamento, por etapa",
     "• *sugestões*: o que espera na sua caixa de entrada",
     "• *vagas*: vagas novas compatíveis com o seu perfil",
+    "• *concursos*: datas dos seus concursos e concursos novos",
     "• o *nome de uma empresa*: como está aquela vaga",
     "",
     "Também dá para *encaminhar* aqui uma mensagem de recrutador: eu crio a sugestão para você conferir no app.",
@@ -60,7 +63,7 @@ export function menuText(name: string | null, appUrl: string): string {
   ].join("\n");
 }
 
-type Command = "menu" | "resumo" | "prazos" | "andamento" | "sugestoes" | "vagas" | "desvincular";
+type Command = "menu" | "resumo" | "prazos" | "andamento" | "sugestoes" | "vagas" | "concursos" | "desvincular";
 
 /**
  * Comandos curtos: a mensagem precisa ser o comando, com ou sem cumprimento
@@ -81,6 +84,7 @@ export function detectCommand(text: string): Command | null {
   if (/^(minhas vagas|vagas em andamento)$/.test(value)) return "andamento";
   if (/^(novas |as )?vagas( novas| sugeridas| para mim| compativeis)?$/.test(value)) return "vagas";
   if (/^(minhas |as )?(sugestao|sugestoes|caixa|caixa de entrada)$/.test(value)) return "sugestoes";
+  if (/^(meus |os |novos )?(concursos?|editais)( novos| abertos| sugeridos| publicos)?$/.test(value)) return "concursos";
   return null;
 }
 
@@ -92,6 +96,9 @@ function deadlinesText(snapshot: ReportSnapshot, ctx: AssistantContext): string 
   if (report.overdue.length) parts.push("*Atrasados*", ...report.overdue.map(line), "");
   if (report.dueToday.length) parts.push("*Hoje*", ...report.dueToday.map(line), "");
   if (report.dueSoon.length) parts.push("*Próximos 7 dias*", ...report.dueSoon.map(line), "");
+  if (report.concursoDeadlines.length) {
+    parts.push("*Concursos nesta semana*", ...report.concursoDeadlines.map((item) => agendaLine(item, ctx.today)), "");
+  }
   if (parts.length === 0) return "Nenhum prazo atrasado nem nos próximos 7 dias. 🎉";
   return parts.join("\n").trim();
 }
@@ -114,6 +121,36 @@ function progressText(snapshot: ReportSnapshot, ctx: AssistantContext): string {
     );
   }
   return blocks.join("\n\n");
+}
+
+/** Datas dos concursos (alertas da semana e o próximo mês) e os concursos novos sugeridos. */
+function concursosText(
+  snapshot: ReportSnapshot,
+  open: { total: number; leads: ReportConcursoLead[] },
+  ctx: AssistantContext,
+): string {
+  const datesByConcurso = Map.groupBy(snapshot.concursoDates, (item) => item.concurso_id);
+  const { alerts, upcoming } = concursoAgenda(
+    snapshot.concursos.map((concurso) => ({ ...concurso, dates: datesByConcurso.get(concurso.id) ?? [] })),
+    ctx.today,
+  );
+  const parts: string[] = [];
+  if (alerts.length) parts.push("*Atenção nos próximos 7 dias*", ...alerts.map((item) => agendaLine(item, ctx.today)), "");
+  if (upcoming.length) {
+    parts.push("*Próximas datas*", ...upcoming.slice(0, 8).map((item) => agendaLine(item, ctx.today)));
+    if (upcoming.length > 8) parts.push(`E mais ${upcoming.length - 8}.`);
+    parts.push("");
+  }
+  if (open.total > 0) {
+    parts.push(`*${open.total === 1 ? "1 concurso novo" : `${open.total} concursos novos`} para você*`, ...concursoLeadLines(open.leads), "");
+  }
+  if (parts.length === 0) {
+    return snapshot.concursos.length === 0
+      ? `Você ainda não acompanha nenhum concurso. Cadastre um (ou leia o edital) em ${ctx.appUrl}/concursos/novo, ou monte o perfil para receber sugestões: ${ctx.appUrl}/concursos/perfil`
+      : `Nenhuma data de concurso nos próximos 30 dias e nenhum concurso novo. Seus concursos: ${ctx.appUrl}/concursos`;
+  }
+  parts.push("A inscrição e o pagamento são sempre no site oficial da banca.", `Seus concursos: ${ctx.appUrl}/concursos`);
+  return parts.join("\n").trim();
 }
 
 /** Acha a empresa citada na mensagem ("como está a Nuvem Pay?"). */
@@ -206,6 +243,11 @@ async function buildReply(deps: AssistantDeps, message: IncomingWhatsAppMessage,
       "",
       `Adicionar ao quadro: ${ctx.appUrl}/vagas`,
     ].join("\n");
+  }
+
+  if (command === "concursos") {
+    const [snapshot, open] = await Promise.all([deps.loadSnapshot(user.userId), deps.loadOpenConcursoLeads(user.userId)]);
+    return concursosText(snapshot, open, ctx);
   }
 
   const snapshot = await deps.loadSnapshot(user.userId);

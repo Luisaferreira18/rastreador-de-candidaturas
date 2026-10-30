@@ -28,6 +28,10 @@ const snapshot: ReportSnapshot = {
   pendingSuggestions: 2,
   newLeads: [],
   newLeadsCount: 0,
+  concursos: [],
+  concursoDates: [],
+  newConcursoLeads: [],
+  newConcursoLeadsCount: 0,
 };
 
 describe("relatório diário", () => {
@@ -58,7 +62,18 @@ describe("relatório diário", () => {
 
   it("dia sem nada: manchete tranquila", () => {
     const empty = buildDailyReport(
-      { applications: [], history: [], tasks: [], pendingSuggestions: 0, newLeads: [], newLeadsCount: 0 },
+      {
+        applications: [],
+        history: [],
+        tasks: [],
+        pendingSuggestions: 0,
+        newLeads: [],
+        newLeadsCount: 0,
+        concursos: [],
+        concursoDates: [],
+        newConcursoLeads: [],
+        newConcursoLeadsCount: 0,
+      },
       TODAY,
     );
     expect(empty).toMatchObject({ headline: "nada urgente hoje", isEmpty: true });
@@ -96,6 +111,54 @@ describe("relatório diário", () => {
     const text = renderReportText(withLeads, "https://rastreador.app", { bold: true });
     expect(text).toContain("*Vagas novas para você*\n• 92% · Estágio em <Dados> · Vertem\n  https://vertem.gupy.io/job/1");
     expect(text).toContain("Ver todas: https://rastreador.app/vagas");
+  });
+
+  it("traz as datas dos concursos da semana, as tarefas deles e os concursos novos", () => {
+    const withConcursos = buildDailyReport(
+      {
+        ...snapshot,
+        tasks: [...snapshot.tasks, { application_id: null, concurso_id: "c1", title: "Revisar SQL", due_date: "2026-10-21" }],
+        concursos: [
+          { id: "c1", organ: "Agência <Dados>", role_title: "Analista de TI", stage: "edital_publicado" },
+          { id: "c2", organ: "Câmara de Serra Clara", role_title: "Analista Legislativo", stage: "taxa_paga" },
+          { id: "c3", organ: "Saneamento do Vale", role_title: "Analista", stage: "sem_aprovacao" },
+        ],
+        concursoDates: [
+          { concurso_id: "c1", kind: "inscricao_fim", date: "2026-10-22", time: "23:59:00" },
+          { concurso_id: "c1", kind: "prova", date: "2026-11-30", time: null },
+          // Já pagou: o aviso do boleto não vale mais.
+          { concurso_id: "c2", kind: "boleto", date: "2026-10-21", time: null },
+          { concurso_id: "c2", kind: "prova", date: "2026-10-25", time: "13:00:00" },
+          // Concurso encerrado não tem agenda.
+          { concurso_id: "c3", kind: "resultado", date: "2026-10-21", time: null },
+        ],
+        newConcursoLeads: [{ organ: "Tribunal de Contas", role: "Analista de TI", url: "https://example.com/inscricao", score: 88 }],
+        newConcursoLeadsCount: 1,
+      },
+      TODAY,
+    );
+    expect(withConcursos.dueSoon.map((task) => [task.title, task.company])).toEqual([
+      ["Revisar SQL", "Agência <Dados>"],
+      ["Estudar a empresa", "Nuvem Pay"],
+    ]);
+    expect(withConcursos.concursoDeadlines.map((item) => [item.organ, item.kind, item.days, item.urgent])).toEqual([
+      ["Agência <Dados>", "inscricao_fim", 2, true],
+      ["Câmara de Serra Clara", "prova", 5, false],
+    ]);
+    expect(withConcursos.headline).toBe(
+      "1 prazo hoje, 1 atrasado, 2 novidades, 2 sugestões para conferir, 2 datas de concurso na semana, 1 concurso novo para você",
+    );
+
+    const email = renderReportEmail(withConcursos, "https://rastreador.app");
+    expect(email.html).toContain("Agência &lt;Dados&gt; · Analista de TI");
+    expect(email.html).toContain("Fim das inscrições");
+    expect(email.html).toContain('href="https://rastreador.app/concursos/sugeridos"');
+
+    const text = renderReportText(withConcursos, "https://rastreador.app", { bold: true });
+    expect(text).toContain(
+      "*Concursos nesta semana*\n• Fim das inscrições · Agência <Dados> · Analista de TI: depois de amanhã, 22/10/2026 às 23:59\n• Prova · Câmara de Serra Clara · Analista Legislativo: em 5 dias, 25/10/2026 às 13:00",
+    );
+    expect(text).toContain("*Concursos novos para você*\n• Nota 88 · Analista de TI · Tribunal de Contas\n  https://example.com/inscricao");
   });
 
   it("escapeHtml cobre os caracteres perigosos", () => {

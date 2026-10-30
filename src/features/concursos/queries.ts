@@ -104,3 +104,52 @@ export async function getConcursoDetail(id: string): Promise<ConcursoDetail | nu
     tasks: tasks.data ?? [],
   };
 }
+
+/** Tudo dos concursos do usuário para exportar em CSV. */
+export async function getConcursoExportData() {
+  const user = await requireUser();
+  const supabase = await createClient();
+  const [concursos, dates, subjects, history, tasks] = await Promise.all([
+    supabase.from("concursos").select("*").eq("user_id", user.id).order("created_at"),
+    supabase.from("concurso_dates").select("*").eq("user_id", user.id),
+    supabase.from("concurso_subjects").select("*").eq("user_id", user.id),
+    supabase.from("concurso_stage_history").select("*").eq("user_id", user.id).order("changed_at"),
+    supabase
+      .from("tasks")
+      .select("*")
+      .eq("user_id", user.id)
+      .not("concurso_id", "is", null)
+      .order("due_date", { nullsFirst: false }),
+  ]);
+  for (const result of [concursos, dates, subjects, history, tasks]) {
+    if (result.error) throw loadError(result.error);
+  }
+  return {
+    concursos: concursos.data ?? [],
+    dates: dates.data ?? [],
+    subjects: subjects.data ?? [],
+    history: history.data ?? [],
+    tasks: tasks.data ?? [],
+  };
+}
+
+/** Um concurso e o cronograma dele, ou todos, para o arquivo .ics da agenda. */
+export async function getConcursoCalendarData(id?: string) {
+  if (id !== undefined && !z.uuid().safeParse(id).success) return null;
+  const user = await requireUser();
+  const supabase = await createClient();
+
+  let concursosQuery = supabase.from("concursos").select("*").eq("user_id", user.id);
+  let datesQuery = supabase.from("concurso_dates").select("*").eq("user_id", user.id);
+  if (id) {
+    concursosQuery = concursosQuery.eq("id", id);
+    datesQuery = datesQuery.eq("concurso_id", id);
+  }
+  const [concursos, dates] = await Promise.all([concursosQuery, datesQuery]);
+  if (concursos.error) throw loadError(concursos.error);
+  if (dates.error) throw loadError(dates.error);
+  if (id && (concursos.data ?? []).length === 0) return null;
+
+  const datesById = Map.groupBy(dates.data ?? [], (item) => item.concurso_id);
+  return (concursos.data ?? []).map((concurso) => ({ concurso, dates: datesById.get(concurso.id) ?? [] }));
+}

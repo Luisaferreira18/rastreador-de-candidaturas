@@ -3,8 +3,11 @@
  * o mesmo resultado vira e-mail, mensagem de WhatsApp e prévia no app.
  */
 
+import { concursoDeadlines, type AgendaItem } from "@/features/concursos/agenda";
 import { computeDashboardMetrics } from "@/features/dashboard/metrics";
 import { groupUpcomingTasks } from "@/features/tasks/upcoming";
+import type { DateKind } from "@/lib/concurso-options";
+import type { ConcursoStageKey } from "@/lib/concurso-stages";
 import { addDaysISO, diffDaysISO, timestampToISODate } from "@/lib/format";
 import type { Platform } from "@/lib/options";
 import { getStage, isActiveStage, type StageKey } from "@/lib/stages";
@@ -22,16 +25,26 @@ export type ReportSnapshot = {
     created_at: string;
   }[];
   history: { application_id: string; from_stage: StageKey | null; to_stage: StageKey; changed_at: string }[];
-  /** Só tarefas pendentes. */
-  tasks: { application_id: string; title: string; due_date: string | null }[];
+  /** Só tarefas pendentes, de candidaturas ou de concursos. */
+  tasks: { application_id: string | null; concurso_id?: string | null; title: string; due_date: string | null }[];
   pendingSuggestions: number;
   /** Vagas sugeridas nas últimas 24 horas: as 5 de nota mais alta e o total. */
   newLeads: ReportLead[];
   newLeadsCount: number;
+  concursos: { id: string; organ: string; role_title: string; stage: ConcursoStageKey }[];
+  /** Datas do cronograma de ontem em diante (o filtro fino é feito aqui). */
+  concursoDates: { concurso_id: string; kind: DateKind; date: string; time: string | null }[];
+  /** Concursos sugeridos nas últimas 24 horas: os 5 de nota mais alta e o total. */
+  newConcursoLeads: ReportConcursoLead[];
+  newConcursoLeadsCount: number;
 };
 
 export type ReportLead = { company: string; title: string; url: string; score: number };
 
+/** Concurso sugerido. `url` é a página de inscrição (ou o edital, quando não há). */
+export type ReportConcursoLead = { organ: string; role: string | null; url: string; score: number };
+
+/** `company` é a empresa da candidatura ou o órgão do concurso. */
 export type ReportTask = { title: string; company: string; dueDate: string };
 export type ReportChange = { company: string; roleTitle: string; from: StageKey | null; to: StageKey; at: string };
 export type ReportStale = { company: string; stage: StageKey; days: number };
@@ -47,6 +60,10 @@ export type DailyReport = {
   pendingSuggestions: number;
   newLeads: ReportLead[];
   newLeadsCount: number;
+  /** Datas dos concursos nos próximos 7 dias (inscrição, boleto, prova...). */
+  concursoDeadlines: AgendaItem[];
+  newConcursoLeads: ReportConcursoLead[];
+  newConcursoLeadsCount: number;
   numbers: { total: number; active: number; sentThisWeek: number; responseRate: number | null };
   isEmpty: boolean;
 };
@@ -60,17 +77,18 @@ function plural(count: number, one: string, many: string) {
 
 export function buildDailyReport(snapshot: ReportSnapshot, today: string): DailyReport {
   const byId = new Map(snapshot.applications.map((application) => [application.id, application]));
+  const concursosById = new Map(snapshot.concursos.map((concurso) => [concurso.id, concurso]));
 
-  // Prazos
-  const datedTasks = snapshot.tasks
-    .filter((task) => byId.has(task.application_id))
-    .map((task, index) => ({
-      id: String(index),
-      title: task.title,
-      due_date: task.due_date,
-      done: false,
-      company: byId.get(task.application_id)!.company,
-    }));
+  // Prazos (tarefas das candidaturas e dos concursos)
+  const parentName = (task: ReportSnapshot["tasks"][number]): string | null => {
+    if (task.application_id) return byId.get(task.application_id)?.company ?? null;
+    if (task.concurso_id) return concursosById.get(task.concurso_id)?.organ ?? null;
+    return null;
+  };
+  const datedTasks = snapshot.tasks.flatMap((task, index) => {
+    const company = parentName(task);
+    return company === null ? [] : [{ id: String(index), title: task.title, due_date: task.due_date, done: false, company }];
+  });
   const groups = groupUpcomingTasks(datedTasks, today);
   const toReportTask = (task: (typeof datedTasks)[number]): ReportTask => ({
     title: task.title,
@@ -116,6 +134,13 @@ export function buildDailyReport(snapshot: ReportSnapshot, today: string): Daily
     (application) => application.applied_at && application.applied_at >= weekAgo && application.applied_at <= today,
   ).length;
 
+  // Datas dos concursos na semana
+  const datesByConcurso = Map.groupBy(snapshot.concursoDates, (item) => item.concurso_id);
+  const concursoItems = concursoDeadlines(
+    snapshot.concursos.map((concurso) => ({ ...concurso, dates: datesByConcurso.get(concurso.id) ?? [] })),
+    today,
+  );
+
   const overdue = groups.overdue.map(toReportTask);
   const dueToday = groups.today.map(toReportTask);
   const dueSoon = groups.soon.map(toReportTask);
@@ -126,6 +151,9 @@ export function buildDailyReport(snapshot: ReportSnapshot, today: string): Daily
     changes.length > 0 && plural(changes.length, "novidade", "novidades"),
     snapshot.pendingSuggestions > 0 && plural(snapshot.pendingSuggestions, "sugestão para conferir", "sugestões para conferir"),
     snapshot.newLeadsCount > 0 && plural(snapshot.newLeadsCount, "vaga nova para você", "vagas novas para você"),
+    concursoItems.length > 0 && plural(concursoItems.length, "data de concurso na semana", "datas de concurso na semana"),
+    snapshot.newConcursoLeadsCount > 0 &&
+      plural(snapshot.newConcursoLeadsCount, "concurso novo para você", "concursos novos para você"),
   ].filter(Boolean) as string[];
 
   const isEmpty =
@@ -135,7 +163,9 @@ export function buildDailyReport(snapshot: ReportSnapshot, today: string): Daily
       changes.length +
       stale.length +
       snapshot.pendingSuggestions +
-      snapshot.newLeadsCount ===
+      snapshot.newLeadsCount +
+      concursoItems.length +
+      snapshot.newConcursoLeadsCount ===
     0;
 
   return {
@@ -149,6 +179,9 @@ export function buildDailyReport(snapshot: ReportSnapshot, today: string): Daily
     pendingSuggestions: snapshot.pendingSuggestions,
     newLeads: snapshot.newLeads,
     newLeadsCount: snapshot.newLeadsCount,
+    concursoDeadlines: concursoItems,
+    newConcursoLeads: snapshot.newConcursoLeads,
+    newConcursoLeadsCount: snapshot.newConcursoLeadsCount,
     numbers: {
       total: metrics.total,
       active: metrics.active,

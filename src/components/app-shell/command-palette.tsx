@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardPaste, Download, Keyboard, Moon, PlugZap, Plus, RefreshCw, SlidersHorizontal, Sun } from "lucide-react";
+import { CalendarPlus, ClipboardPaste, Download, Keyboard, Moon, PlugZap, Plus, RefreshCw, SlidersHorizontal, Sun } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useState, useTransition } from "react";
@@ -25,10 +25,10 @@ import { NAV_ITEMS } from "./nav-items";
 
 type SearchItem = { id: string; company: string; role_title: string; stage: StageKey };
 
-/** Baixa o CSV (é um arquivo, não uma página, então não passa pelo roteador). */
-function downloadCsv() {
+/** Baixa um arquivo (não é uma página, então não passa pelo roteador). */
+function download(href: string) {
   const link = document.createElement("a");
-  link.href = "/api/export";
+  link.href = href;
   link.download = "";
   link.click();
 }
@@ -119,10 +119,24 @@ export function CommandPalette({
             </CommandItem>
             <CommandItem
               keywords={["csv", "planilha", "excel", "baixar"]}
-              onSelect={() => run(downloadCsv)}
+              onSelect={() => run(() => download("/api/export"))}
             >
               <Download />
-              Exportar tudo em CSV
+              Exportar candidaturas em CSV
+            </CommandItem>
+            <CommandItem
+              keywords={["csv", "planilha", "excel", "baixar", "concursos"]}
+              onSelect={() => run(() => download("/api/export/concursos"))}
+            >
+              <Download />
+              Exportar concursos em CSV
+            </CommandItem>
+            <CommandItem
+              keywords={["ics", "agenda", "google agenda", "calendario", "cronograma", "concursos"]}
+              onSelect={() => run(() => download("/api/concursos/agenda"))}
+            >
+              <CalendarPlus />
+              Baixar a agenda dos concursos (.ics)
             </CommandItem>
             <CommandItem
               keywords={["tema", "modo escuro", "modo claro", "dark", "light"]}
