@@ -13,7 +13,7 @@ const column = (page: Page, stage: string) => page.locator(`section[aria-label^=
 
 test("entra pela demonstração", async ({ page }) => {
   await enterDemo(page);
-  await expect(page.getByText("conta de demonstração")).toBeVisible();
+  await expect(page.getByText("conta de demonstração", { exact: true })).toBeVisible();
   await expect(page.getByText("Candidaturas", { exact: true })).toBeVisible();
 
   // Quem já entrou não vê mais a página inicial.

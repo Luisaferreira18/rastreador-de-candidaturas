@@ -16,7 +16,7 @@ contagem até a prova, matérias, leitor de edital e busca diária de editais ab
 - **RLS em todas as tabelas:** cada pessoa só lê e altera as próprias linhas, mesmo chamando o Supabase direto pelo navegador.
 - **Caça-vagas e caça-concursos com nota de compatibilidade:** busca diária em fontes públicas, nota de 0 a 100 com os motivos na tela, por regras e sem IA.
 - **Leitor de edital com proteção contra SSRF:** o link é baixado no servidor, com o IP conferido na hora de conectar, sem endereços internos e com limite de tamanho, tempo e redirecionamentos.
-- **Testes no CI:** lint, testes e build a cada push e pull request.
+- **Testes no CI:** lint, testes unitários e build a cada push e pull request, e testes de ponta a ponta com Playwright contra um Supabase local.
 
 ![Painel](docs/prints/painel.png)
 
@@ -114,7 +114,7 @@ back-end, banco relacional com regras de segurança por usuário, login, testes 
 | Formulários | React Hook Form + Zod (o mesmo schema valida no navegador e no servidor) |
 | Arrastar e soltar | dnd-kit (mouse, toque e teclado, com anúncios para leitores de tela) |
 | Gráficos | Recharts (pelos componentes de gráfico do shadcn) e barras em HTML/CSS |
-| Testes | Vitest |
+| Testes | Vitest e Playwright (ponta a ponta) |
 | Deploy | Vercel (com Cron diário para a conta demo) |
 
 ## Como funciona por dentro
@@ -259,8 +259,10 @@ src/
   lib/                      Supabase, etapas, opções, formatação pt-BR, CSV, erros
   types/database.ts         Tipos do banco
 supabase/migrations/        SQL do banco (tabelas, trigger, RLS, índices)
+supabase/config.toml        Supabase local dos testes de ponta a ponta
 scripts/seed-demo.ts        Cria/recria a conta demo
 tests/                      Testes (Vitest)
+e2e/                        Testes de ponta a ponta (Playwright)
 assets/fonts/               Fonte Geist (licença OFL) usada na imagem de compartilhamento
 assets/demo/                Currículo fictício da conta demo (também usado nos testes)
 .github/workflows/ci.yml    CI: lint, testes e build a cada push e pull request
@@ -611,6 +613,7 @@ npm run dev                  # http://localhost:3000
 | `npm run dev` | Servidor de desenvolvimento |
 | `npm run build` / `npm start` | Build e servidor de produção |
 | `npm test` | Roda os testes (Vitest) |
+| `npm run test:e2e` | Testes de ponta a ponta (Playwright), com o Supabase local no ar |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | Checagem de tipos do TypeScript |
 | `npm run seed:demo` | Cria ou recria a conta de demonstração |
@@ -659,6 +662,31 @@ Os testes cobrem as partes que mais importam:
 
 O [CI](.github/workflows/ci.yml) roda `npm ci`, lint, testes e build a cada push e pull request,
 com variáveis de ambiente falsas (o build não acessa o Supabase).
+
+### Testes de ponta a ponta
+
+Quatro testes com [Playwright](https://playwright.dev), em [e2e/demo.spec.ts](e2e/demo.spec.ts),
+usando a conta demo num navegador de verdade: entrar pela demonstração, criar uma candidatura,
+arrastar um card no Kanban (e conferir depois de recarregar) e baixar o CSV.
+
+**Nunca usam o banco de produção.** Rodam contra um **Supabase local**, que a
+[CLI](https://supabase.com/docs/guides/local-development) sobe no Docker com as migrations do
+repositório, e contra o build da própria máquina. O [playwright.config.ts](playwright.config.ts) se
+recusa a começar se o endereço do Supabase não for local, e o `npm run test:e2e` pega as chaves de
+`supabase status`, não do `.env.local`.
+
+```bash
+npx supabase start     # precisa do Docker; a primeira vez baixa as imagens
+npx playwright install chromium
+npm run test:e2e       # recompila, recria a conta demo local e roda os testes
+npx supabase stop      # quando terminar
+```
+
+Como o comando recompila com o endereço local, rode `npm run build` de novo antes de usar o
+`npm start` com o seu `.env.local`.
+
+No CI, o job **Testes de ponta a ponta** faz o mesmo, separado do job de lint, testes e build, e não
+usa nenhum segredo. Se falhar, o relatório com print e rastreamento fica nos artefatos da execução.
 
 ## Deploy na Vercel
 
