@@ -1,0 +1,3 @@
+# Supabase local, usado só nos testes de ponta a ponta (npx supabase start).
+# As migrations de supabase/migrations são aplicadas ao subir. O resto fica no padrão da CLI.
+project_id = "rastreador-de-candidaturas"
