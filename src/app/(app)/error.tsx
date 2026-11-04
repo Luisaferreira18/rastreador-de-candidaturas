@@ -5,10 +5,12 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
+import { reportClientError } from "@/lib/sentry";
 
 export default function AppError({ error, retry }: { error: unknown; retry: () => void }) {
   useEffect(() => {
     console.error(error);
+    reportClientError(error);
   }, [error]);
 
   return (

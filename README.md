@@ -33,6 +33,7 @@ contagem até a prova, matérias, leitor de edital e busca diária de editais ab
 - [Concursos públicos](#concursos-públicos)
 - [Rodar localmente](#rodar-localmente)
 - [Deploy na Vercel](#deploy-na-vercel)
+- [Monitoramento](#monitoramento)
 - [Decisões e próximos passos](#decisões-e-próximos-passos)
 - [Licença](#licença)
 
@@ -116,6 +117,7 @@ back-end, banco relacional com regras de segurança por usuário, login, testes 
 | Gráficos | Recharts (pelos componentes de gráfico do shadcn) e barras em HTML/CSS |
 | Testes | Vitest e Playwright (ponta a ponta) |
 | Deploy | Vercel (com Cron diário para a conta demo) |
+| Monitoramento | Sentry (opcional, só com `SENTRY_DSN`) |
 
 ## Como funciona por dentro
 
@@ -643,6 +645,7 @@ Os testes cobrem as partes que mais importam:
   cidade, o que não é guardado (nome, e-mail, telefone), a nota com as habilidades, os avisos de
   idioma, e a rota `/api/curriculo` (grava na pasta da pessoa, recusa arquivo que não é PDF e a
   conta demo).
+- **Monitoramento:** a máscara de dados pessoais, o que é tirado de cada evento e que nada liga sem o `SENTRY_DSN`.
 - **Automação:** o leitor de mensagens (confirmação da Gupy e do LinkedIn, reprovação, teste,
   entrevistas, case, proposta, aprovação, mensagem colada do WhatsApp, alertas de vagas ignorados,
   datas), a escolha da candidatura e da etapa (nunca para trás) e a rota que recebe os e-mails.
@@ -717,6 +720,23 @@ usa nenhum segredo. Se falhar, o relatório com print e rastreamento fica nos ar
 
 > Variáveis `NEXT_PUBLIC_` são embutidas no build. Se mudar alguma depois, faça um novo deploy
 > (**Deployments → ⋯ → Redeploy**).
+
+## Monitoramento
+
+Os erros do navegador e do servidor podem ir para o [Sentry](https://sentry.io), que tem plano grátis.
+É opcional: **sem `SENTRY_DSN`, o SDK nem entra no código do navegador**, e o servidor não inicia nada.
+
+**Como ligar:**
+1. Crie uma conta no Sentry e um projeto do tipo **Next.js**.
+2. Copie o DSN em **Project Settings → Client Keys (DSN)**.
+3. Na Vercel, crie a variável `SENTRY_DSN` e faça um **Redeploy**. O navegador recebe o DSN no build, por isso só vale depois de um deploy novo. O DSN não é segredo: ele só permite enviar erros.
+
+**O que não sai do app** ([src/lib/sentry.ts](src/lib/sentry.ts)):
+- pessoa e IP (`sendDefaultPii: false`), cookies, cabeçalhos, corpo das requisições e parâmetros de URL;
+- histórico de cliques e de navegação (breadcrumbs), gravação de sessão e medições de desempenho, que também gastariam a cota grátis;
+- e-mails, CPFs, telefones, chaves e tokens no texto dos erros: uma máscara troca por `[e-mail]`, `[CPF]` e assim por diante antes do envio.
+
+No servidor, entram os erros de renderização e os `console.error` das rotas de cron e de API, que tratam os próprios erros. Os stack traces do navegador chegam minificados, porque os source maps não são enviados: isso exigiria mais um token no build.
 
 ## Decisões e próximos passos
 
