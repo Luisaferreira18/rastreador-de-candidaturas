@@ -24,6 +24,7 @@ function AgendaRow({ item, today, tone }: { item: AgendaItem; today: string; ton
         <p className="text-sm leading-5 font-medium">{dateKindLabel(item.kind)}</p>
         <Link
           href={`/concursos/${item.concursoId}`}
+          prefetch={false}
           className="mt-0.5 block truncate text-xs text-muted-foreground hover:text-foreground"
         >
           {agendaConcursoName(item)}
@@ -33,7 +34,7 @@ function AgendaRow({ item, today, tone }: { item: AgendaItem; today: string; ton
         className={cn(
           "shrink-0 text-right text-xs",
           tone === "danger" && "text-red-600 dark:text-red-400",
-          tone === "warn" && "text-amber-600 dark:text-amber-400",
+          tone === "warn" && "text-amber-700 dark:text-amber-400",
         )}
       >
         <p className="font-medium">{formatRelativeDay(item.date, today)}</p>
@@ -69,7 +70,7 @@ export function ConcursoAgendaCard({ agenda, today }: { agenda: ConcursoAgenda; 
             id="concursos-atencao"
             className={cn(
               "mb-1.5 flex items-center gap-1.5 text-xs font-semibold",
-              agenda.alerts.length > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground",
+              agenda.alerts.length > 0 ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground",
             )}
           >
             <AlertTriangle className="size-3.5" aria-hidden />

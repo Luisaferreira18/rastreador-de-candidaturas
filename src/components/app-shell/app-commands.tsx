@@ -1,10 +1,13 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { createContext, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CommandPalette } from "./command-palette";
 import { NAV_ITEMS } from "./nav-items";
 import { ShortcutsDialog } from "./shortcuts-dialog";
+
+// A paleta pesa e só abre com Ctrl+K: carrega na primeira vez que for usada.
+const CommandPalette = dynamic(() => import("./command-palette").then((module) => module.CommandPalette), { ssr: false });
 
 type AppCommands = {
   openPalette: () => void;
@@ -115,10 +118,13 @@ export function AppCommandsProvider({ children }: { children: React.ReactNode })
 
   const value = useMemo(() => ({ openPalette, openShortcuts }), [openPalette, openShortcuts]);
 
+  const [paletteLoaded, setPaletteLoaded] = useState(false);
+  if (paletteOpen && !paletteLoaded) setPaletteLoaded(true);
+
   return (
     <AppCommandsContext value={value}>
       {children}
-      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} onShowShortcuts={openShortcuts} />
+      {paletteLoaded && <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} onShowShortcuts={openShortcuts} />}
       <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </AppCommandsContext>
   );

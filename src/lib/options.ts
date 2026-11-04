@@ -25,7 +25,7 @@ export const WORK_MODELS = [
 
 export const PRIORITIES = [
   { value: "alta", label: "Alta", dot: "bg-red-500", text: "text-red-600 dark:text-red-400" },
-  { value: "media", label: "Média", dot: "bg-amber-500", text: "text-amber-600 dark:text-amber-400" },
+  { value: "media", label: "Média", dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-400" },
   { value: "baixa", label: "Baixa", dot: "bg-slate-400", text: "text-muted-foreground" },
 ] as const;
 

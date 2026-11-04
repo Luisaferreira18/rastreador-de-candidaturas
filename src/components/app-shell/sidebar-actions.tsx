@@ -9,7 +9,7 @@ import { useAppCommands } from "./app-commands";
 export function SidebarPrimaryAction() {
   return (
     <Button asChild className="w-full justify-start gap-2">
-      <Link href="/candidaturas/nova">
+      <Link href="/candidaturas/nova" prefetch={false}>
         <Plus />
         <span className="flex-1 text-left">Nova candidatura</span>
         <Kbd className="border-primary-foreground/20 bg-primary-foreground/15 text-primary-foreground">N</Kbd>

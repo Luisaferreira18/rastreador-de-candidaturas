@@ -41,9 +41,9 @@ export function UserMenu({ user, compact = false }: { user: CurrentUser; compact
           "flex items-center gap-2 rounded-md text-left outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50",
           compact ? "p-1" : "w-full p-1.5",
         )}
-        aria-label="Menu da conta"
       >
-        <Avatar className="size-7">
+        <span className="sr-only">Menu da conta</span>
+        <Avatar aria-hidden className="size-7">
           {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt="" />}
           <AvatarFallback className="bg-primary/10 text-[11px] font-semibold text-primary">
             {initials(user)}

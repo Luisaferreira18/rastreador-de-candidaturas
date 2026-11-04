@@ -48,7 +48,7 @@ export function MobileHeader({ userSlot, navSlot }: { userSlot: React.ReactNode;
         <Search />
       </Button>
       <Button asChild size="icon" aria-label="Nova candidatura">
-        <Link href="/candidaturas/nova">
+        <Link href="/candidaturas/nova" prefetch={false}>
           <Plus />
         </Link>
       </Button>

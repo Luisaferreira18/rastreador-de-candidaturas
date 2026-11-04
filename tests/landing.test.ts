@@ -27,6 +27,11 @@ describe("página inicial pública", () => {
     expect(location(await visit("/"))).toBe("http://localhost/painel");
   });
 
+  it("o robots.txt fica aberto para os buscadores", async () => {
+    getClaims.mockResolvedValue({ data: null });
+    expect(location(await visit("/robots.txt"))).toBeNull();
+  });
+
   it("o resto do app segue pedindo login", async () => {
     getClaims.mockResolvedValue({ data: null });
     expect(location(await visit("/painel"))).toBe("http://localhost/login?next=%2Fpainel");

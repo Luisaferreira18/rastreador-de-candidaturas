@@ -23,7 +23,7 @@ type OptimisticAction =
 
 const DUE_STYLES = {
   overdue: "text-red-600 dark:text-red-400 font-medium",
-  today: "text-amber-600 dark:text-amber-400 font-medium",
+  today: "text-amber-700 dark:text-amber-400 font-medium",
   soon: "text-foreground",
   later: "text-muted-foreground",
   none: "text-muted-foreground",

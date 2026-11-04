@@ -15,7 +15,7 @@ import { FunnelChart } from "@/features/dashboard/components/funnel-chart";
 import { PlatformBars } from "@/features/dashboard/components/platform-bars";
 import { StatTile } from "@/features/dashboard/components/stat-tile";
 import { UpcomingDeadlines } from "@/features/dashboard/components/upcoming-deadlines";
-import { WeeklyChart } from "@/features/dashboard/components/weekly-chart";
+import { WeeklyPanel } from "@/features/dashboard/components/weekly-panel";
 import { computeDashboardMetrics, weeklyApplications } from "@/features/dashboard/metrics";
 import { formatPercent, pluralize, todayISO } from "@/lib/format";
 
@@ -29,7 +29,7 @@ export default function DashboardPage() {
         description="Como está a sua busca por vagas e concursos, em números."
         actions={
           <Button asChild size="sm">
-            <Link href="/candidaturas/nova">
+            <Link href="/candidaturas/nova" prefetch={false}>
               <Plus /> Nova candidatura
             </Link>
           </Button>
@@ -146,7 +146,7 @@ async function DashboardContent() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <WeeklyChart data={weekly} />
+                  <WeeklyPanel data={weekly} />
                 </CardContent>
               </Card>
             </div>

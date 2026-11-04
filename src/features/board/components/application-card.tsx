@@ -31,7 +31,7 @@ import { MoveToMenuItems } from "./move-to-menu";
 
 const DUE_STYLES = {
   overdue: "text-red-600 dark:text-red-400",
-  today: "text-amber-600 dark:text-amber-400",
+  today: "text-amber-700 dark:text-amber-400",
   soon: "text-foreground",
   later: "text-muted-foreground",
   none: "text-muted-foreground",

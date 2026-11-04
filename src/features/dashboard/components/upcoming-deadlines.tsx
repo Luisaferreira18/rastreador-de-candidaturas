@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 
 const GROUPS = [
   { key: "overdue", title: "Atrasadas", tone: "text-red-600 dark:text-red-400", bar: "bg-red-500" },
-  { key: "today", title: "Hoje", tone: "text-amber-600 dark:text-amber-400", bar: "bg-amber-500" },
+  { key: "today", title: "Hoje", tone: "text-amber-700 dark:text-amber-400", bar: "bg-amber-500" },
   { key: "soon", title: "Próximos 7 dias", tone: "text-foreground", bar: "bg-primary" },
 ] as const;
 

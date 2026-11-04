@@ -45,7 +45,9 @@ function Actions({ showDemo, className }: { showDemo: boolean; className?: strin
     <div className={cn("flex flex-col justify-center gap-3 sm:flex-row", className)}>
       {showDemo && <DemoButton variant="default" size="lg" className="sm:w-auto" />}
       <Button variant={showDemo ? "outline" : "default"} size="lg" className="w-full sm:w-auto" asChild>
-        <Link href="/cadastro">Criar conta</Link>
+        <Link href="/cadastro" prefetch={false}>
+          Criar conta
+        </Link>
       </Button>
     </div>
   );
@@ -62,7 +64,9 @@ export default function LandingPage() {
         <nav aria-label="Conta" className="flex items-center gap-1">
           <ThemeToggle />
           <Button variant="ghost" asChild>
-            <Link href="/login">Entrar</Link>
+            <Link href="/login" prefetch={false}>
+              Entrar
+            </Link>
           </Button>
         </nav>
       </header>
@@ -85,6 +89,7 @@ export default function LandingPage() {
             name="painel"
             alt="Painel com o total de candidaturas, a agenda dos concursos e o funil"
             sizes="(min-width: 1152px) 1104px, (min-width: 640px) 100vw, 640px"
+            priority
             className="mt-12"
           />
         </section>

@@ -34,6 +34,7 @@ contagem até a prova, matérias, leitor de edital e busca diária de editais ab
 - [Rodar localmente](#rodar-localmente)
 - [Deploy na Vercel](#deploy-na-vercel)
 - [Monitoramento](#monitoramento)
+- [Lighthouse](#lighthouse)
 - [Decisões e próximos passos](#decisões-e-próximos-passos)
 - [Licença](#licença)
 
@@ -46,6 +47,7 @@ back-end, banco relacional com regras de segurança por usuário, login, testes 
 
 ## Funcionalidades
 
+- **Página inicial pública** com prints do app, em modo claro e escuro. Quem já entrou vai direto ao painel.
 - **Login e cadastro** com e-mail e senha, recuperação de senha e login com Google (opcional).
 - **Quadro Kanban** com uma coluna por etapa. Arraste os cards entre colunas (ou use o teclado). A
   mudança é salva na hora, entra na linha do tempo e pode ser desfeita pelo aviso. As colunas finais
@@ -255,6 +257,7 @@ src/
     whatsapp/               assistente: comandos, vinculação por código, webhook
     job-search/             caça-vagas: fontes (Gupy, Greenhouse, Lever), nota, bolsa e benefícios, busca
     resume/                 currículo: leitura do PDF, habilidades, idiomas, curso, sugestões
+    landing/                print em moldura da página inicial (a página fica em app/page.tsx)
     concursos/              concursos: cronograma, matérias, leitor de edital, agenda, .ics, CSV
     concursos/search/       caça-concursos: DOU, Querido Diário, catálogo, nota, perfil
   components/               Componentes compartilhados (app-shell, ui do shadcn, etc.)
@@ -701,6 +704,7 @@ usa nenhum segredo. Se falhar, o relatório com print e rastreamento fica nos ar
    - `NEXT_PUBLIC_SITE_URL` = `https://SEU-APP.vercel.app`
    - `SUPABASE_SECRET_KEY` (conta demo, assistente do WhatsApp, busca diária de vagas e catálogo de concursos)
    - `INLABS_EMAIL`, `INLABS_PASSWORD` (opcionais: o DOU pelo INLABS no caça-concursos)
+   - `SENTRY_DSN` (opcional: veja [Monitoramento](#monitoramento))
    - `DEMO_EMAIL`, `DEMO_PASSWORD` (conta demo)
    - `CRON_SECRET`: um valor aleatório longo (por exemplo, gerado com `openssl rand -hex 32`)
    - `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=true` (se configurou o Google)
@@ -737,6 +741,23 @@ Os erros do navegador e do servidor podem ir para o [Sentry](https://sentry.io),
 - e-mails, CPFs, telefones, chaves e tokens no texto dos erros: uma máscara troca por `[e-mail]`, `[CPF]` e assim por diante antes do envio.
 
 No servidor, entram os erros de renderização e os `console.error` das rotas de cron e de API, que tratam os próprios erros. Os stack traces do navegador chegam minificados, porque os source maps não são enviados: isso exigiria mais um token no build.
+
+## Lighthouse
+
+Notas no modo celular (Lighthouse 13.6, com a limitação padrão de rede e de processador), em 04/11/2026:
+
+| Página | Desempenho | Acessibilidade | Boas práticas | SEO |
+| --- | --- | --- | --- | --- |
+| Página inicial | 92 | 100 | 100 | 100 |
+| Painel da demo | 92 | 100 | 100 | 100 |
+
+**Como foi medido:** build de produção na própria máquina, cache do navegador limpo a cada rodada (como numa primeira visita) e a mediana de 5 rodadas. A nota de desempenho varia alguns pontos de uma rodada para outra e o número do site publicado pode ser diferente, porque depende da rede e da CDN. O painel foi medido logado na conta demo. O que mais segura a nota nas duas páginas é o LCP simulado, por volta de 3 s.
+
+**O que foi corrigido por causa dessas medições:**
+- **Acessibilidade do painel (era 92):** contraste do âmbar nos prazos, títulos dos cartões que não eram títulos de verdade, um elemento focável dentro do gráfico marcado como oculto e o nome do botão do menu da conta, que não incluía o texto visível.
+- **Desempenho do painel (era 80):** o Recharts só baixa quando o gráfico está perto de aparecer, a paleta de comandos só carrega na primeira vez que abre e o formulário de nova candidatura não é mais pré-carregado em toda tela.
+- **Página inicial:** o print do topo carrega com prioridade, sem esperar o carregamento sob demanda, e os links de entrada não pré-carregam o código dos formulários.
+- **`robots.txt`:** antes redirecionava para o login, o que derrubava o SEO.
 
 ## Decisões e próximos passos
 
