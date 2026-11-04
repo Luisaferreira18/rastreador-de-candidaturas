@@ -10,7 +10,31 @@ contagem até a prova, matérias, leitor de edital e busca diária de editais ab
 
 > **Demonstração:** [rastreador-de-candidaturas.vercel.app](https://rastreador-de-candidaturas.vercel.app). Clique em **Explorar a demonstração**: a conta já vem com dados de exemplo, e eles voltam ao original todo dia.
 
+## Destaques técnicos
+
+- **Histórico por trigger no PostgreSQL:** toda mudança de etapa entra na linha do tempo pelo próprio banco, venha do Kanban, do formulário ou de outro cliente.
+- **RLS em todas as tabelas:** cada pessoa só lê e altera as próprias linhas, mesmo chamando o Supabase direto pelo navegador.
+- **Caça-vagas e caça-concursos com nota de compatibilidade:** busca diária em fontes públicas, nota de 0 a 100 com os motivos na tela, por regras e sem IA.
+- **Leitor de edital com proteção contra SSRF:** o link é baixado no servidor, com o IP conferido na hora de conectar, sem endereços internos e com limite de tamanho, tempo e redirecionamentos.
+- **Testes no CI:** lint, testes e build a cada push e pull request.
+
 ![Painel](docs/prints/painel.png)
+
+## Índice
+
+- [Objetivo](#objetivo)
+- [Funcionalidades](#funcionalidades)
+- [Tecnologias](#tecnologias)
+- [Como funciona por dentro](#como-funciona-por-dentro)
+- [Configurar o Supabase](#configurar-o-supabase)
+- [Automação gratuita](#automação-gratuita)
+- [Caça-vagas](#caça-vagas)
+- [Currículo](#currículo)
+- [Concursos públicos](#concursos-públicos)
+- [Rodar localmente](#rodar-localmente)
+- [Deploy na Vercel](#deploy-na-vercel)
+- [Decisões e próximos passos](#decisões-e-próximos-passos)
+- [Licença](#licença)
 
 ## Objetivo
 
@@ -73,8 +97,12 @@ back-end, banco relacional com regras de segurança por usuário, login, testes 
 | ![Lista com filtros](docs/prints/lista.png) | ![Quadro no modo escuro](docs/prints/quadro-escuro.png) |
 | **Caixa de entrada** | **Celular** |
 | ![Caixa de entrada com sugestões](docs/prints/caixa-de-entrada.png) | <img src="docs/prints/celular.png" alt="Versão para celular" width="260"> |
-| **Vagas sugeridas** | |
-| ![Vagas sugeridas com nota de compatibilidade](docs/prints/vagas.png) | |
+| **Vagas sugeridas** | **Quadro de concursos** |
+| ![Vagas sugeridas com nota de compatibilidade](docs/prints/vagas.png) | ![Quadro de concursos por etapa](docs/prints/concursos-quadro.png) |
+| **Detalhe do concurso** | **Concursos sugeridos** |
+| ![Concurso com contagem até a prova, cronograma e matérias](docs/prints/concurso-detalhe.png) | ![Concursos sugeridos com nota e motivos](docs/prints/concursos-sugeridos.png) |
+| **Ler edital** | |
+| ![Leitor de edital com o que foi encontrado no texto](docs/prints/ler-edital.png) | |
 
 ## Tecnologias
 
