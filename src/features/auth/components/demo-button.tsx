@@ -4,16 +4,26 @@ import { Loader2, Sparkles } from "lucide-react";
 import { useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { signInAsDemo } from "../actions";
 
 /** Entra na conta de demonstração com um clique (as credenciais ficam só no servidor). */
-export function DemoButton() {
+export function DemoButton({
+  variant = "secondary",
+  size,
+  className,
+}: {
+  variant?: "default" | "secondary";
+  size?: "default" | "lg";
+  className?: string;
+}) {
   const [pending, startTransition] = useTransition();
   return (
     <Button
       type="button"
-      variant="secondary"
-      className="w-full"
+      variant={variant}
+      size={size}
+      className={cn("w-full", className)}
       disabled={pending}
       onClick={() =>
         startTransition(async () => {

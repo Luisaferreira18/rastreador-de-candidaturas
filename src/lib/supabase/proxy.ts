@@ -71,8 +71,9 @@ export async function updateSession(request: NextRequest) {
     return redirect;
   };
 
+  // A raiz é a página pública; quem já entrou vai direto ao painel.
   if (pathname === "/") {
-    return redirectTo(isLoggedIn ? "/painel" : "/login");
+    return isLoggedIn ? redirectTo("/painel") : response;
   }
 
   if (!isLoggedIn && !matches(pathname, PUBLIC_PATHS)) {
