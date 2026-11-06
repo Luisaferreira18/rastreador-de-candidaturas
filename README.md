@@ -465,7 +465,7 @@ cargo é comparado sem acentos e com sinônimos em português e inglês ("Dados"
 "Desenvolvedor" = "Developer"). Cada ponto vira um motivo na tela. Ficam de fora, em vez de ganhar
 nota baixa: outro tipo de vaga, nível sênior ou de liderança (quando o cargo do perfil não pede),
 outra cidade em vaga presencial ou híbrida, vaga fora do Brasil, inscrições encerradas, banco de
-talentos, jovem aprendiz, títulos com palavras a evitar e formação que o currículo não tem (veja
+talentos, jovem aprendiz, títulos com palavras a evitar e formação ou experiência que o currículo não tem (veja
 [Currículo](#currículo)). Remuneração abaixo do mínimo vira aviso e desconta pontos. Só entram vagas com nota a partir de 60, no máximo 30 novas por busca.
 
 **Bolsa, horário e benefícios** (regras em
@@ -536,7 +536,27 @@ está escrito com clareza. A leitura do PDF pode errar, e por isso o **Perfil de
 **Corrigir** na linha da formação. Sem currículo, ou sem a situação do curso, a formação não filtra
 nada. Sugestões antigas sem resposta que a formação descarta são apagadas na busca seguinte, se a
 vaga voltar nos resultados (a descrição não fica guardada, então não dá para reavaliar as outras).
-Ainda não são lidos o semestre pedido ("a partir do 3º semestre") nem os anos de experiência.
+Ainda não é lido o semestre pedido ("a partir do 3º semestre").
+
+**Experiência** (regras em [src/features/job-search/experience.ts](src/features/job-search/experience.ts)):
+o app soma os períodos da seção de experiência do currículo, sem contar duas vezes os que se
+sobrepõem, e guarda só o total em meses (empresas e cargos não ficam guardados). Depois compara com
+a vaga:
+
+| A vaga diz | Para a pessoa | O que acontece |
+| --- | --- | --- |
+| "Experiência mínima de 3 anos" | Falta mais de um ano | Sai da lista |
+| "Experiência mínima de 3 anos" | Falta até um ano | Fica, com aviso |
+| "Experiência sólida", "consolidada", "ampla" | Menos de 2 anos | Sai da lista |
+| Qualquer um desses | Currículo sem experiência que dê para somar | Fica, com aviso |
+| "Desejável" | Menos do que isso | Fica, com aviso |
+| "Experiência em Excel" | Qualquer uma | Fica: é comum demais em vaga de entrada |
+
+Vaga de estágio não é filtrada por experiência. Frases sobre a empresa ("completamos 50 anos de
+experiência no setor") são ignoradas. Na amostra real, só 19 de 527 vagas dizem os anos com número,
+por isso as palavras também contam. Vaga CLT que não diz o nível nem cita experiência forte continua
+aparecendo. Currículos enviados antes dessa leitura ficam sem o total até serem trocados ou
+corrigidos em **Corrigir**.
 
 **Privacidade:** nome, e-mail, telefone, endereço e documentos não são lidos nem guardados. O PDF
 fica no bucket privado e pode ser apagado a qualquer momento, junto com o que foi lido dele. PDF
@@ -669,6 +689,8 @@ Os testes cobrem as partes que mais importam:
   idioma, e a rota `/api/curriculo` (grava na pasta da pessoa, recusa arquivo que não é PDF e a
   conta demo). A formação comparada com a vaga, com frases reais da Gupy: "completo" e "completo ou
   cursando", período de formatura, lista de cursos, sugestões antigas apagadas e a correção manual.
+  A experiência: os anos pedidos, frases sobre a empresa ignoradas, "experiência sólida" e a soma
+  dos períodos do currículo.
 - **Monitoramento:** a máscara de dados pessoais, o que é tirado de cada evento e que nada liga sem o `SENTRY_DSN`.
 - **Automação:** o leitor de mensagens (confirmação da Gupy e do LinkedIn, reprovação, teste,
   entrevistas, case, proposta, aprovação, mensagem colada do WhatsApp, alertas de vagas ignorados,

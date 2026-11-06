@@ -53,6 +53,7 @@ export function toResumeRow(
     course: extraction.course,
     education_status: extraction.educationStatus,
     graduation_year: extraction.graduationYear,
+    experience_months: extraction.experienceMonths,
     city: extraction.city?.slice(0, 80) ?? null,
     state: extraction.state,
     suggested_roles: extraction.roles,
@@ -70,6 +71,12 @@ export const educationFormSchema = z.object({
     .int("Informe o ano com 4 dígitos.")
     .min(1950, "Informe o ano com 4 dígitos.")
     .max(2100, "Informe o ano com 4 dígitos.")
+    .nullable(),
+  experienceMonths: z
+    .number({ error: "Informe a experiência em meses." })
+    .int("Informe a experiência em meses.")
+    .min(0, "Informe a experiência em meses.")
+    .max(1200, "Informe a experiência em meses.")
     .nullable(),
 });
 

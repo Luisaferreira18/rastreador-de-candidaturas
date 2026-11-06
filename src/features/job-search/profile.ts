@@ -111,7 +111,7 @@ export function toJobProfileFormValues(row: JobProfileRow): JobProfileFormValues
 /** Converte a linha do banco (e o currículo, se houver) no formato usado pela busca. */
 export function toSearchProfile(
   row: JobProfileRow,
-  resume: Pick<Resume, "skills" | "languages" | "course" | "education_status" | "graduation_year"> | null = null,
+  resume: Pick<Resume, "skills" | "languages" | "course" | "education_status" | "graduation_year" | "experience_months"> | null = null,
 ): SearchProfile {
   return {
     roles: row.roles,
@@ -134,5 +134,6 @@ export function toSearchProfile(
           graduationYear: resume.graduation_year,
         }
       : null,
+    resumeExperience: resume ? { months: resume.experience_months } : null,
   };
 }

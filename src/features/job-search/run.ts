@@ -13,7 +13,7 @@ import {
   buildSkipCheck,
   collectJobs,
   completeJobs,
-  leadsBlockedByEducation,
+  leadsBlockedByResume,
   rankJobs,
   tasksForProfile,
   type JobCache,
@@ -58,7 +58,7 @@ export async function runSearchForUser(
     supabase.from("applications").select("company, role_title, job_url").eq("user_id", userId),
     supabase
       .from("resumes")
-      .select("skills, languages, course, education_status, graduation_year")
+      .select("skills, languages, course, education_status, graduation_year, experience_months")
       .eq("user_id", userId)
       .maybeSingle(),
   ]);
@@ -74,7 +74,7 @@ export async function runSearchForUser(
   const skip = buildSkipCheck(existing.data ?? [], applications.data ?? []);
   const fresh = await completeJobs(ranked.filter((job) => !skip(job)).slice(0, MAX_NEW_PER_RUN), profile, today, fetchJson);
 
-  const blockedLeads = await leadsBlockedByEducation(existing.data ?? [], jobs, profile, today, fetchJson);
+  const blockedLeads = await leadsBlockedByResume(existing.data ?? [], jobs, profile, today, fetchJson);
   if (blockedLeads.length > 0) {
     // Apagar (e não descartar): se o currículo mudar, a vaga pode voltar.
     const { error } = await supabase.from("job_leads").delete().in("id", blockedLeads).eq("status", "nova");

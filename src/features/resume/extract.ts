@@ -36,6 +36,8 @@ export type ResumeExtraction = {
   course: string | null;
   educationStatus: EducationStatus | null;
   graduationYear: number | null;
+  /** Meses de experiência somados, ou null se o currículo não permitiu somar. */
+  experienceMonths: number | null;
   city: string | null;
   state: UF | null;
   /** Cargos para o perfil de busca ("Estágio em Dados"). */
@@ -283,6 +285,79 @@ export function educationStatus(
 }
 
 // ---------------------------------------------------------------------------
+// Experiência (só o total: empresas e cargos não são guardados)
+// ---------------------------------------------------------------------------
+
+const EXPERIENCE_HEADING =
+  /^(?:experiencias?(?: profissiona(?:l|is))?|historico profissional|trajetoria profissional|atuacao profissional|(?:work |professional )?experience|employment)\s*:?$/;
+const OTHER_HEADING =
+  /^(?:formacao|escolaridade|educacao|education|habilidades|competencias|conhecimentos|idiomas|linguas|skills|languages|certifica|cursos|projetos|referencias|premios|publicacoes|atividades|voluntari|resumo|objetivo|sobre|perfil)/;
+const MAX_HEADING_LENGTH = 45;
+
+const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const ENGLISH_MONTHS: Record<string, string> = { feb: "fev", apr: "abr", may: "mai", aug: "ago", sep: "set", oct: "out", dec: "dez" };
+const DATE = "(?:(?:(?<![a-z])(jan|fev|feb|mar|abr|apr|mai|may|jun|jul|ago|aug|set|sep|out|oct|nov|dez|dec)[a-z]*\\.?(?:\\s+de\\s+|\\s*/\\s*|\\s+)|(?:\\d{1,2}[/.-])?(\\d{1,2})[/.-])?((?:19|20)\\d\\d))";
+const DATE_RANGE = new RegExp(
+  `${DATE}\\s*(?:[-–—]|(?<![a-z])(?:a|ate|to)(?![a-z]))\\s*(?:${DATE}|(atualmente|atual|presente|hoje|o momento|momento|current|present|now|em andamento))`,
+  "g",
+);
+
+function monthIndex(name: string | undefined, number: string | undefined, fallback: number): number {
+  if (name) return MONTHS.indexOf(ENGLISH_MONTHS[name] ?? name);
+  const month = Number(number);
+  return month >= 1 && month <= 12 ? month - 1 : fallback;
+}
+
+/** As linhas da seção de experiência, ou null se não houver um título claro. */
+function experienceSection(text: string): string | null {
+  const lines = fold(text.normalize("NFC")).split(/\r?\n/).map((line) => line.trim());
+  const start = lines.findIndex((line) => line.length <= MAX_HEADING_LENGTH && EXPERIENCE_HEADING.test(line));
+  if (start === -1) return null;
+  const end = lines.findIndex((line, index) => index > start && line.length <= MAX_HEADING_LENGTH && OTHER_HEADING.test(line));
+  return lines.slice(start + 1, end === -1 ? undefined : end).join(" ");
+}
+
+/**
+ * Soma os períodos da seção de experiência, sem contar duas vezes os que se
+ * sobrepõem. Só com o ano, conta o ano inteiro: melhor sobrar do que faltar,
+ * porque a soma pode tirar vagas da lista.
+ */
+export function findExperienceMonths(text: string, currentYear: number): number | null {
+  const section = experienceSection(text);
+  if (section === null) return null;
+
+  const lastMonth = currentYear * 12 + 11;
+  const periods: [number, number][] = [];
+  for (const match of section.matchAll(DATE_RANGE)) {
+    const [, startName, startNumber, startYear, endName, endNumber, endYear] = match;
+    const start = Number(startYear) * 12 + monthIndex(startName, startNumber, 0);
+    const end = endYear ? Number(endYear) * 12 + monthIndex(endName, endNumber, 11) : lastMonth;
+    if (end >= start && start <= lastMonth) periods.push([start, Math.min(end, lastMonth)]);
+  }
+  if (periods.length === 0) return null;
+
+  periods.sort((a, b) => a[0] - b[0]);
+  let total = 0;
+  let covered = -1;
+  for (const [start, end] of periods) {
+    const from = Math.max(start, covered + 1);
+    if (end >= from) total += end - from + 1;
+    covered = Math.max(covered, end);
+  }
+  return Math.min(total, 1200);
+}
+
+/** "8 meses", "2 anos", "1 ano e 3 meses". */
+export function experienceLabel(months: number): string {
+  const years = Math.floor(months / 12);
+  const rest = months % 12;
+  const monthsText = rest === 1 ? "1 mês" : `${rest} meses`;
+  if (years === 0) return monthsText;
+  const yearsText = years === 1 ? "1 ano" : `${years} anos`;
+  return rest === 0 ? yearsText : `${yearsText} e ${monthsText}`;
+}
+
+// ---------------------------------------------------------------------------
 // Cidade (só no começo do currículo, onde ficam os dados de contato)
 // ---------------------------------------------------------------------------
 
@@ -379,6 +454,7 @@ export function extractResume(text: string, currentYear: number): ResumeExtracti
     course: course?.course.name ?? null,
     educationStatus: education.status,
     graduationYear: education.graduationYear,
+    experienceMonths: findExperienceMonths(text, currentYear),
     city,
     state,
     roles: suggestedRoles(course?.course.name ?? null, skills, education.status),

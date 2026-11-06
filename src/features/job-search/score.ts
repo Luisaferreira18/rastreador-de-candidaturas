@@ -5,8 +5,8 @@
  *   Cargo 45 · Tipo de vaga 20 · Local e modelo 20 · Palavras-chave e currículo 15
  *
  * Vagas que claramente não servem (outro tipo, nível sênior, outra cidade,
- * fora do Brasil, palavra a evitar, formação que o currículo não tem) ficam de
- * fora em vez de ganhar nota baixa.
+ * fora do Brasil, palavra a evitar, formação ou experiência que o currículo não
+ * tem) ficam de fora em vez de ganhar nota baixa.
  */
 
 import { LANGUAGE_LEVEL_LABELS, levelRank, type ResumeLanguage } from "@/features/resume/extract";
@@ -16,6 +16,7 @@ import { jobTypeLabel, workModelLabel, type JobType } from "@/lib/options";
 import { findCities, findUFs, findUFsInTitle, isBrazilLocation } from "./brazil";
 import { detectSeniority, type Seniority } from "./classify";
 import { educationFit } from "./education";
+import { experienceFit } from "./experience";
 import { containsTerm, coreTerms, fold } from "./text";
 import type { JobMatch, ScrapedJob, SearchProfile } from "./types";
 
@@ -175,6 +176,8 @@ export function scoreJob(job: ScrapedJob, profile: SearchProfile, today: string)
   // Formação pedida na descrição, comparada com a do currículo
   const education = educationFit(haystack, job.jobType, profile.resumeEducation, Number(today.slice(0, 4)));
   if (education.excluded) return excluded(education.excluded);
+  const experience = experienceFit(haystack, job.jobType, profile.resumeExperience);
+  if (experience.excluded) return excluded(experience.excluded);
 
   const foundKeywords = profile.keywords.filter((keyword) => mentionsSkill(haystack, keyword));
   const typed = new Set(profile.keywords.map((keyword) => fold(keyword.trim())));
@@ -200,6 +203,7 @@ export function scoreJob(job: ScrapedJob, profile: SearchProfile, today: string)
     ...(lowSalary ? [`${formatCurrency(job.salaryCents)}: abaixo do seu mínimo`] : []),
     ...languageWarnings(haystack, profile.resumeLanguages),
     ...education.warnings,
+    ...experience.warnings,
   ];
 
   const total = WEIGHTS.role + WEIGHTS.type + WEIGHTS.place + (termCount > 0 ? WEIGHTS.keywords : 0);

@@ -73,6 +73,8 @@ export type SearchProfile = {
   resumeLanguages: ResumeLanguage[] | null;
   /** Formação do currículo, ou null sem currículo (aí a formação não filtra nada). */
   resumeEducation: ResumeEducation | null;
+  /** Experiência do currículo, ou null sem currículo (`months` vazio: não deu para somar). */
+  resumeExperience: { months: number | null } | null;
 };
 
 /** Resultado da nota de compatibilidade de uma vaga. */

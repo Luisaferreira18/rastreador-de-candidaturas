@@ -23,7 +23,7 @@ import { formatDateTime } from "@/lib/format";
 import { jobTypeLabel, type JobType } from "@/lib/options";
 import { cn } from "@/lib/utils";
 import { deleteResume, updateResumeEducation } from "../actions";
-import { COURSE_NAMES, LANGUAGE_LEVEL_LABELS, type EducationStatus } from "../extract";
+import { COURSE_NAMES, LANGUAGE_LEVEL_LABELS, experienceLabel, type EducationStatus } from "../extract";
 import {
   DEMO_RESUME_MESSAGE,
   MAX_RESUME_BYTES,
@@ -81,6 +81,7 @@ function EducationEditor({
   const [course, setCourse] = useState(resume.course ?? NO_COURSE);
   const [status, setStatus] = useState(resume.education_status ?? "");
   const [year, setYear] = useState(resume.graduation_year?.toString() ?? "");
+  const [months, setMonths] = useState(resume.experience_months?.toString() ?? "");
   const [saving, startSave] = useTransition();
 
   function save() {
@@ -93,12 +94,13 @@ function EducationEditor({
         course: course === NO_COURSE ? null : course,
         status: status as EducationStatus,
         graduationYear: year.trim() ? Number(year) : null,
+        experienceMonths: months.trim() ? Number(months) : null,
       });
       if (!result.ok) {
         toast.error(result.error);
         return;
       }
-      toast.success("Formação corrigida", { description: "A próxima busca de vagas já usa essa informação." });
+      toast.success("Currículo corrigido", { description: "A próxima busca de vagas já usa essa informação." });
       onSaved(result.data.resume);
     });
   }
@@ -142,6 +144,17 @@ function EducationEditor({
             maxLength={4}
             value={year}
             onChange={(event) => setYear(event.target.value.replace(/\D/g, ""))}
+          />
+        </div>
+        <div className="grid gap-1.5 sm:col-span-3">
+          <Label htmlFor={`${uid}-months`}>Experiência profissional, em meses (estágios contam)</Label>
+          <Input
+            id={`${uid}-months`}
+            inputMode="numeric"
+            maxLength={4}
+            className="sm:w-32"
+            value={months}
+            onChange={(event) => setMonths(event.target.value.replace(/\D/g, ""))}
           />
         </div>
       </div>
@@ -427,6 +440,25 @@ export function ResumeCard({
                   </>
                 )}
               </dd>
+              {!editingEducation && (
+                <>
+                  <dt className="text-muted-foreground not-first:mt-3 sm:not-first:mt-0">Experiência</dt>
+                  <dd className="space-y-1">
+                    <p>
+                      {resume.experience_months === null
+                        ? "Não conseguimos somar do PDF."
+                        : resume.experience_months === 0
+                          ? "Sem experiência"
+                          : experienceLabel(resume.experience_months)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {resume.experience_months === null
+                        ? "Use Corrigir para informar: assim a busca confere os anos que cada vaga pede."
+                        : "Vagas que pedem bem mais do que isso, em anos ou como experiência sólida, ficam de fora das sugestões, exceto estágios."}
+                    </p>
+                  </dd>
+                </>
+              )}
             </>
           )}
           {languages.length > 0 && (

@@ -3,7 +3,7 @@ import { citedCourses, degreeDemand, educationFit, graduationWindow } from "@/fe
 import { toSearchProfile } from "@/features/job-search/profile";
 import { runSearchForUser } from "@/features/job-search/run";
 import { scoreJob } from "@/features/job-search/score";
-import { leadsBlockedByEducation } from "@/features/job-search/search";
+import { leadsBlockedByResume } from "@/features/job-search/search";
 import { fold } from "@/features/job-search/text";
 import type { ResumeEducation, ScrapedJob, SearchProfile } from "@/features/job-search/types";
 import type { Tables } from "@/types/database";
@@ -187,6 +187,7 @@ const profile: SearchProfile = {
   resumeSkills: [],
   resumeLanguages: [],
   resumeEducation: STUDENT,
+  resumeExperience: null,
 };
 
 function job(overrides: Partial<ScrapedJob> = {}): ScrapedJob {
@@ -234,7 +235,7 @@ describe("na nota da vaga", () => {
 
 describe("toSearchProfile", () => {
   const row = { roles: [], keywords: [], excluded_words: [], extra_boards: [], work_models: [], job_types: [] } as unknown as Tables<"job_profiles">;
-  const resume = { skills: [], languages: [], course: "Direito", graduation_year: 2027 };
+  const resume = { skills: [], languages: [], course: "Direito", graduation_year: 2027, experience_months: null };
 
   it("leva a formação do currículo para a busca", () => {
     expect(toSearchProfile(row, { ...resume, education_status: "cursando" }).resumeEducation).toEqual({
@@ -256,7 +257,7 @@ describe("sugestões antigas", () => {
       job({ externalId: "cursando", text: "Superior completo ou cursando." }),
       job({ externalId: "descartada", text: "Ensino superior completo." }),
     ];
-    const ids = await leadsBlockedByEducation(
+    const ids = await leadsBlockedByResume(
       [lead("a", "completo"), lead("b", "cursando"), lead("c", "descartada", "descartada"), lead("d", "sumiu")],
       jobs,
       profile,
@@ -271,17 +272,17 @@ describe("sugestões antigas", () => {
     const jobs = [job({ source: "greenhouse", externalId: "1", detailUrl })];
     const leads = [{ id: "a", source: "greenhouse", external_id: "1", status: "nova" }];
     const found = vi.fn(async () => ({ content: "&lt;p&gt;Ensino superior completo.&lt;/p&gt;" }));
-    expect(await leadsBlockedByEducation(leads, jobs, profile, TODAY, found)).toEqual(["a"]);
+    expect(await leadsBlockedByResume(leads, jobs, profile, TODAY, found)).toEqual(["a"]);
     const broken = vi.fn(async () => {
       throw new Error("fora do ar");
     });
-    expect(await leadsBlockedByEducation(leads, jobs, profile, TODAY, broken)).toEqual([]);
+    expect(await leadsBlockedByResume(leads, jobs, profile, TODAY, broken)).toEqual([]);
   });
 
   it("sem currículo, nada sai e nada é baixado", async () => {
     const fetchJson = vi.fn();
     const jobs = [job({ externalId: "x", text: "Ensino superior completo.", detailUrl: "https://exemplo.com" })];
-    expect(await leadsBlockedByEducation([lead("a", "x")], jobs, { ...profile, resumeEducation: null }, TODAY, fetchJson)).toEqual([]);
+    expect(await leadsBlockedByResume([lead("a", "x")], jobs, { ...profile, resumeEducation: null, resumeExperience: null }, TODAY, fetchJson)).toEqual([]);
     expect(fetchJson).not.toHaveBeenCalled();
   });
 
@@ -305,7 +306,7 @@ describe("sugestões antigas", () => {
             if (table === "applications") return resolve({ data: [], error: null });
             if (table === "resumes") {
               return resolve({
-                data: { skills: [], languages: [], course: "Sistemas de Informação", education_status: "cursando", graduation_year: 2027 },
+                data: { skills: [], languages: [], course: "Sistemas de Informação", education_status: "cursando", graduation_year: 2027, experience_months: null },
                 error: null,
               });
             }
@@ -356,7 +357,7 @@ describe("sugestões antigas", () => {
 
 describe("corrigir a formação", () => {
   const USER = { id: "u1", email: "ana@exemplo.com", name: "Ana", avatarUrl: null, isDemo: false };
-  const VALUES = { course: "Direito", status: "cursando", graduationYear: 2027 } as const;
+  const VALUES = { course: "Direito", status: "cursando", graduationYear: 2027, experienceMonths: 6 } as const;
 
   beforeEach(() => {
     vi.mocked(getCurrentUser).mockResolvedValue(USER);
@@ -377,6 +378,7 @@ describe("corrigir a formação", () => {
         course: "Direito",
         education_status: "cursando",
         graduation_year: 2027,
+        experience_months: 6,
         suggested_roles: ["Estágio em Direito", "Estágio em Dados"],
       },
       filters: [["user_id", "u1"]],

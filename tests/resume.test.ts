@@ -30,6 +30,7 @@ describe("leitura do currículo", () => {
       course: "Sistemas de Informação",
       educationStatus: "cursando",
       graduationYear: 2027,
+      experienceMonths: 22,
       city: "São Paulo",
       state: "SP",
       roles: ["Estágio em Desenvolvimento", "Estágio em Tecnologia", "Estágio em Dados"],

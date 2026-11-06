@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { suggestedJobTypes, suggestedRoles } from "./extract";
 import { DEMO_RESUME_MESSAGE, RESUME_BUCKET, educationFormSchema, resumePath, type EducationFormValues, type Resume } from "./resume";
 
-/** Corrige a formação lida do PDF e libera uma busca nova, que já usa a correção. */
+/** Corrige a formação e a experiência lidas do PDF e libera uma busca nova, que já usa a correção. */
 export async function updateResumeEducation(values: EducationFormValues): Promise<ActionResult<{ resume: Resume }>> {
   const user = await getCurrentUser();
   if (!user) return failure("Sua sessão expirou. Entre novamente para continuar.");
@@ -16,7 +16,7 @@ export async function updateResumeEducation(values: EducationFormValues): Promis
 
   const parsed = educationFormSchema.safeParse(values);
   if (!parsed.success) return failure(parsed.error.issues[0]?.message ?? "Revise a formação.");
-  const { course, status, graduationYear } = parsed.data;
+  const { course, status, graduationYear, experienceMonths } = parsed.data;
 
   const supabase = await createClient();
   const current = await supabase.from("resumes").select("skills").eq("user_id", user.id).maybeSingle();
@@ -29,6 +29,7 @@ export async function updateResumeEducation(values: EducationFormValues): Promis
       course,
       education_status: status,
       graduation_year: graduationYear,
+      experience_months: experienceMonths,
       suggested_roles: suggestedRoles(course, current.data.skills, status),
       suggested_job_types: suggestedJobTypes(status, graduationYear, Number(todayISO().slice(0, 4))),
     })

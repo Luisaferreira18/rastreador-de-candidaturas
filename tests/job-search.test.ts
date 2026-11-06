@@ -33,6 +33,7 @@ const profile: SearchProfile = {
   resumeSkills: [],
   resumeLanguages: null,
   resumeEducation: null,
+  resumeExperience: null,
 };
 
 /** Formato real da busca pública da Gupy (out/2026). */

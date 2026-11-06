@@ -165,6 +165,8 @@ type ResumeRow = {
   course: string | null;
   education_status: "cursando" | "concluido" | null;
   graduation_year: number | null;
+  /** Total de meses de experiência, ou null se o currículo não permitiu somar. */
+  experience_months: number | null;
   city: string | null;
   state: string | null;
   suggested_roles: string[];

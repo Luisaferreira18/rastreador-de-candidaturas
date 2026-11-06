@@ -7,6 +7,7 @@
 import { companyKey } from "@/features/inbox/plan";
 import { COMPANY_BOARDS, boardKey } from "./boards";
 import { educationFit } from "./education";
+import { experienceFit } from "./experience";
 import { MIN_SCORE, scoreJob } from "./score";
 import { boardApiUrl, parseBoardResponse, withGreenhouseDetail } from "./sources/boards";
 import { gupyQueryUrls, parseGupyResponse } from "./sources/gupy";
@@ -119,18 +120,18 @@ export async function completeJobs(
 }
 
 /**
- * Sugestões ainda sem resposta que a formação do currículo descarta (vieram de
+ * Sugestões ainda sem resposta que o currículo descarta (formação ou experiência; vieram de
  * uma busca antiga, ou o currículo mudou). Só dá para saber das vagas que
  * voltaram nesta busca, porque a descrição não fica guardada.
  */
-export async function leadsBlockedByEducation(
+export async function leadsBlockedByResume(
   leads: readonly { id: string; source: string; external_id: string; status: string }[],
   jobs: readonly ScrapedJob[],
   profile: SearchProfile,
   today: string,
   fetchJson: FetchJson,
 ): Promise<string[]> {
-  if (!profile.resumeEducation) return [];
+  if (!profile.resumeEducation && !profile.resumeExperience) return [];
   const byKey = new Map(jobs.map((job) => [`${job.source}:${job.externalId}`, job]));
   const pending = leads
     .filter((lead) => lead.status === "nova" && byKey.has(`${lead.source}:${lead.external_id}`))
@@ -143,8 +144,10 @@ export async function leadsBlockedByEducation(
     } catch {
       return null;
     }
-    const fit = educationFit(fold(`${job.title} ${job.text}`), job.jobType, profile.resumeEducation, Number(today.slice(0, 4)));
-    return fit.excluded ? lead.id : null;
+    const text = fold(`${job.title} ${job.text}`);
+    const education = educationFit(text, job.jobType, profile.resumeEducation, Number(today.slice(0, 4)));
+    const experience = experienceFit(text, job.jobType, profile.resumeExperience);
+    return education.excluded || experience.excluded ? lead.id : null;
   });
   return blocked.filter((id): id is string => id !== null);
 }
