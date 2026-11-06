@@ -169,6 +169,14 @@ const COURSES: readonly Course[] = [
   { name: "Medicina Veterinária", terms: ["medicina veterinaria", "veterinaria"], areas: ["Veterinária"] },
 ];
 
+/** Área de um curso da lista. */
+export function courseAreas(name: string): readonly string[] {
+  return COURSES.find((course) => course.name === name)?.areas ?? [];
+}
+
+/** Nomes dos cursos da lista, para a pessoa corrigir o que foi lido. */
+export const COURSE_NAMES: readonly string[] = COURSES.map((course) => course.name);
+
 /** Títulos da parte de formação, do mais para o menos específico. */
 const EDUCATION_HEADINGS = [/formacao academica/g, /escolaridade/g, /educacao/g, /education/g, /formacao/g];
 const EDUCATION_WINDOW = 400;
@@ -179,11 +187,24 @@ const DEGREE_PREFIX =
 
 type CourseMatch = { course: Course; index: number; length: number };
 
+/** O curso que vale é a graduação: "MBA em Marketing" não diz a situação dela. */
+const NOT_THE_DEGREE = "(?<!(?:mba|pos[- ]?graduacao|especializacao|mestrado|doutorado|extensao|tecnico em|curso tecnico)[^.;|]{0,30})";
+
+function courseRegExp(term: string, prefix = ""): RegExp {
+  return new RegExp(`(^|[^a-z0-9])${NOT_THE_DEGREE}${prefix}${term.replace(/\s+/g, "\\s+")}($|[^a-z0-9])`);
+}
+
+/** Cursos citados num trecho de texto, sem repetir o genérico quando há o específico. */
+export function findCitedCourses(foldedText: string): string[] {
+  const found = COURSES.filter((course) => course.terms.some((term) => courseRegExp(term).test(foldedText))).map((course) => course.name);
+  return found.filter((name) => name !== "Engenharia" || !/engenharia (?:de|da|civil|mecanica|eletrica|quimica|ambiental)/.test(foldedText));
+}
+
 function earliestCourse(text: string, prefix = ""): CourseMatch | null {
   let best: CourseMatch | null = null;
   for (const course of COURSES) {
     for (const term of course.terms) {
-      const match = new RegExp(`(^|[^a-z0-9])${prefix}${term.replace(/\s+/g, "\\s+")}($|[^a-z0-9])`).exec(text);
+      const match = courseRegExp(term, prefix).exec(text);
       if (!match) continue;
       const index = match.index + match[1].length;
       const length = match[0].length - match[1].length - match[2].length;
@@ -194,18 +215,47 @@ function earliestCourse(text: string, prefix = ""): CourseMatch | null {
   return best;
 }
 
+/** Onde a formação acaba: "Experiência 2022 - atual" não diz nada sobre o curso. */
+const NEXT_SECTION =
+  /experiencia|experience|habilidades|competencias|conhecimentos|idiomas|skills|languages|certifica|projetos|objetivo|voluntari|atividades|cursos complementares/;
+/** Outra linha da formação, com datas próprias. */
+const OTHER_ENTRY = /ensino medio|ensino fundamental|mba|pos[- ]?graduacao|especializacao|mestrado|doutorado|extensao|tecnico em|curso tecnico/;
+const HAS_DATE_OR_STATUS = /\b(?:19|20)\d\d\b|cursando|em andamento|em curso|previs|conclu|formad[oa]|\d+\s*[oº°ª]?\s*(?:semestre|periodo)/;
+
+function untilNextSection(text: string): string {
+  const next = NEXT_SECTION.exec(text);
+  return next ? text.slice(0, next.index) : text;
+}
+
+/** O trecho que fala só deste curso; se ele não tiver datas, toda a formação (datas antes do curso). */
+function courseContext(section: string, found: CourseMatch): string {
+  const rest = section.slice(found.index + found.length);
+  const nextEntry = OTHER_ENTRY.exec(rest)?.index ?? rest.length;
+  const nextCourse = earliestCourse(rest)?.index ?? rest.length;
+  const own = section.slice(found.index, found.index + found.length + Math.min(nextEntry, nextCourse));
+  return HAS_DATE_OR_STATUS.test(own) ? own : section;
+}
+
 /** O curso e o trecho do currículo que fala dele (para ler as datas). */
 function findCourse(foldedText: string): { course: Course; context: string } | null {
   for (const heading of EDUCATION_HEADINGS) {
     for (const match of foldedText.matchAll(heading)) {
       const window = foldedText.slice(match.index, match.index + EDUCATION_WINDOW);
+      // Em PDF de duas colunas, a parte seguinte pode vir antes do curso.
+      const headingEnd = match[0].length;
+      const section = window.slice(0, headingEnd) + untilNextSection(window.slice(headingEnd));
+      const inSection = earliestCourse(section);
+      if (inSection) return { course: inSection.course, context: courseContext(section, inSection) };
       const found = earliestCourse(window);
       if (found) return { course: found.course, context: window };
     }
   }
   const found = earliestCourse(foldedText, DEGREE_PREFIX);
   if (!found) return null;
-  return { course: found.course, context: foldedText.slice(Math.max(0, found.index - 50), found.index + 250) };
+  return {
+    course: found.course,
+    context: foldedText.slice(Math.max(0, found.index - 50), found.index) + untilNextSection(foldedText.slice(found.index, found.index + 250)),
+  };
 }
 
 /** Cursando ou concluído, e o ano de formatura (previsto ou não). */
@@ -282,7 +332,7 @@ function roleFor(area: string, status: EducationStatus | null): string {
   return ANALYST_AREAS.has(area) ? `Analista de ${area}` : area;
 }
 
-function suggestedJobTypes(status: EducationStatus | null, graduationYear: number | null, currentYear: number): JobType[] {
+export function suggestedJobTypes(status: EducationStatus | null, graduationYear: number | null, currentYear: number): JobType[] {
   if (status === "cursando") {
     return graduationYear !== null && graduationYear <= currentYear + 1 ? ["estagio", "trainee"] : ["estagio"];
   }
@@ -305,6 +355,12 @@ function skillAreas(skills: readonly string[]): string[] {
     .map(([area]) => area);
 }
 
+/** Cargos para o perfil: primeiro os do curso, depois os das habilidades. */
+export function suggestedRoles(course: string | null, skills: readonly string[], status: EducationStatus | null): string[] {
+  const areas = [...(course ? courseAreas(course) : []), ...skillAreas(skills)];
+  return [...new Set(areas.map((area) => roleFor(area, status)))].slice(0, MAX_SUGGESTED_ROLES);
+}
+
 // ---------------------------------------------------------------------------
 // Tudo junto
 // ---------------------------------------------------------------------------
@@ -317,9 +373,6 @@ export function extractResume(text: string, currentYear: number): ResumeExtracti
   const education = course ? educationStatus(course.context, currentYear) : { status: null, graduationYear: null };
   const { city, state } = findCity(text);
 
-  const areas = [...(course?.course.areas ?? []), ...skillAreas(skills)];
-  const roles = [...new Set(areas.map((area) => roleFor(area, education.status)))].slice(0, MAX_SUGGESTED_ROLES);
-
   return {
     skills,
     languages,
@@ -328,7 +381,7 @@ export function extractResume(text: string, currentYear: number): ResumeExtracti
     graduationYear: education.graduationYear,
     city,
     state,
-    roles,
+    roles: suggestedRoles(course?.course.name ?? null, skills, education.status),
     jobTypes: suggestedJobTypes(education.status, education.graduationYear, currentYear),
   };
 }

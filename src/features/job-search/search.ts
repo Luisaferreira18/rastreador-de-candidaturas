@@ -6,6 +6,7 @@
 
 import { companyKey } from "@/features/inbox/plan";
 import { COMPANY_BOARDS, boardKey } from "./boards";
+import { educationFit } from "./education";
 import { MIN_SCORE, scoreJob } from "./score";
 import { boardApiUrl, parseBoardResponse, withGreenhouseDetail } from "./sources/boards";
 import { gupyQueryUrls, parseGupyResponse } from "./sources/gupy";
@@ -115,6 +116,37 @@ export async function completeJobs(
     }
   });
   return completed.filter((job): job is ScoredJob => job !== null).sort(byScore);
+}
+
+/**
+ * Sugestões ainda sem resposta que a formação do currículo descarta (vieram de
+ * uma busca antiga, ou o currículo mudou). Só dá para saber das vagas que
+ * voltaram nesta busca, porque a descrição não fica guardada.
+ */
+export async function leadsBlockedByEducation(
+  leads: readonly { id: string; source: string; external_id: string; status: string }[],
+  jobs: readonly ScrapedJob[],
+  profile: SearchProfile,
+  today: string,
+  fetchJson: FetchJson,
+): Promise<string[]> {
+  if (!profile.resumeEducation) return [];
+  const byKey = new Map(jobs.map((job) => [`${job.source}:${job.externalId}`, job]));
+  const pending = leads
+    .filter((lead) => lead.status === "nova" && byKey.has(`${lead.source}:${lead.external_id}`))
+    .slice(0, MAX_NEW_PER_RUN);
+
+  const blocked = await mapLimit(pending, CONCURRENCY, async (lead) => {
+    let job = byKey.get(`${lead.source}:${lead.external_id}`)!;
+    try {
+      if (job.detailUrl) job = withGreenhouseDetail(job, await fetchJson(job.detailUrl));
+    } catch {
+      return null;
+    }
+    const fit = educationFit(fold(`${job.title} ${job.text}`), job.jobType, profile.resumeEducation, Number(today.slice(0, 4)));
+    return fit.excluded ? lead.id : null;
+  });
+  return blocked.filter((id): id is string => id !== null);
 }
 
 /** Endereço sem parâmetros, para comparar links ("...?jobBoardSource=gupy_portal"). */

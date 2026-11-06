@@ -3,6 +3,9 @@
  * sinônimos em português e inglês ("Dados" = "Data", "Desenvolvedor" = "Developer").
  */
 
+/** Quanto da descrição fica guardado: os requisitos às vezes vêm depois de um texto longo. */
+export const MAX_JOB_TEXT = 12_000;
+
 /** Minúsculas e sem acentos. */
 export function fold(text: string): string {
   return text

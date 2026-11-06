@@ -1,4 +1,4 @@
-import type { ResumeLanguage } from "@/features/resume/extract";
+import type { EducationStatus, ResumeLanguage } from "@/features/resume/extract";
 import type { JobType, WorkModel } from "@/lib/options";
 
 /** De onde a vaga veio. */
@@ -47,6 +47,13 @@ export type ScrapedJob = {
   text: string;
 };
 
+/** Formação lida do currículo (ou corrigida pela pessoa). */
+export type ResumeEducation = {
+  course: string | null;
+  status: EducationStatus | null;
+  graduationYear: number | null;
+};
+
 /** O perfil já no formato usado pela busca (vem da tabela job_profiles). */
 export type SearchProfile = {
   roles: string[];
@@ -64,6 +71,8 @@ export type SearchProfile = {
   resumeSkills: string[];
   /** Idiomas do currículo, ou null sem currículo (aí não há aviso de idioma). */
   resumeLanguages: ResumeLanguage[] | null;
+  /** Formação do currículo, ou null sem currículo (aí a formação não filtra nada). */
+  resumeEducation: ResumeEducation | null;
 };
 
 /** Resultado da nota de compatibilidade de uma vaga. */

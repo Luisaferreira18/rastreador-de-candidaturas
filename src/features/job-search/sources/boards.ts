@@ -5,7 +5,7 @@
 
 import { detectJobType, detectOtherType, detectWorkModel } from "../classify";
 import { extractJobDetails, htmlToText } from "../details";
-import { stripHtml } from "../text";
+import { MAX_JOB_TEXT, stripHtml } from "../text";
 import type { BoardRef, ScrapedJob } from "../types";
 import { SourceError } from "./http";
 
@@ -80,7 +80,7 @@ export function withGreenhouseDetail(job: ScrapedJob, json: unknown): ScrapedJob
     benefits: details.benefits,
     workload: details.workload,
     detailUrl: null,
-    text: text.slice(0, 6000),
+    text: text.slice(0, MAX_JOB_TEXT),
   };
 }
 
@@ -158,7 +158,7 @@ export function normalizeLeverPosting(posting: LeverPosting, board: BoardRef): S
     benefits: details.benefits,
     workload: details.workload,
     detailUrl: null,
-    text: text.slice(0, 6000),
+    text: text.slice(0, MAX_JOB_TEXT),
   };
 }
 

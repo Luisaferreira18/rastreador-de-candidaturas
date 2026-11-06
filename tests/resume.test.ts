@@ -94,6 +94,27 @@ describe("leitura do currículo", () => {
     expect(educationStatus("", YEAR)).toEqual({ status: null, graduationYear: null });
   });
 
+  it("a data do emprego atual não faz quem se formou parecer estudante", () => {
+    const text = "Formação Acadêmica\nAdministração - Universidade X\n2018 - 2022\nExperiência\nAnalista na Empresa Y\n2022 - atual";
+    expect(extractResume(text, YEAR)).toMatchObject({ course: "Administração", educationStatus: "concluido", graduationYear: 2022 });
+  });
+
+  it("a situação é a da graduação, não a do ensino médio nem a da pós", () => {
+    const highSchool = "Formação\nEnsino Médio - Escola X - Concluído em 2019\nBacharelado em Direito - Universidade Y - Previsão de conclusão: dezembro de 2027";
+    expect(extractResume(highSchool, YEAR)).toMatchObject({ course: "Direito", educationStatus: "cursando", graduationYear: 2027 });
+
+    const mba = "Formação\nMBA em Marketing - cursando, previsão 2028\nAdministração - Universidade Y - 2016 - 2020";
+    expect(extractResume(mba, YEAR)).toMatchObject({ course: "Administração", educationStatus: "concluido", graduationYear: 2020 });
+  });
+
+  it("com as datas antes do curso, continua lendo", () => {
+    expect(extractResume("Formação\n2023 - 2027\nCiência da Computação - Universidade X", YEAR)).toMatchObject({
+      course: "Ciência da Computação",
+      educationStatus: "cursando",
+      graduationYear: 2027,
+    });
+  });
+
   it("cidade só no começo, sem pegar o nome da linha de cima nem o bairro", () => {
     expect(findCity("Maria Souza\nMontes Claros - MG · (38) 90000-0000")).toEqual({ city: "Montes Claros", state: "MG" });
     expect(findCity("Rua das Flores, 10 - Centro, Campinas - SP")).toEqual({ city: "Campinas", state: "SP" });

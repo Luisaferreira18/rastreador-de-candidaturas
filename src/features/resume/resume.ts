@@ -4,7 +4,15 @@
  */
 
 import type { Json, Tables, TablesInsert } from "@/types/database";
-import { LANGUAGE_LEVELS, type LanguageLevel, type ResumeExtraction, type ResumeLanguage } from "./extract";
+import { z } from "zod";
+import {
+  COURSE_NAMES,
+  LANGUAGE_LEVELS,
+  type EducationStatus,
+  type LanguageLevel,
+  type ResumeExtraction,
+  type ResumeLanguage,
+} from "./extract";
 
 export type Resume = Tables<"resumes">;
 
@@ -51,6 +59,24 @@ export function toResumeRow(
     suggested_job_types: extraction.jobTypes,
     uploaded_at: new Date().toISOString(),
   };
+}
+
+/** A pessoa corrige o que foi lido da formação (a busca depende disso). */
+export const educationFormSchema = z.object({
+  course: z.string().refine((value) => COURSE_NAMES.includes(value)).nullable(),
+  status: z.enum(["cursando", "concluido"], { error: "Escolha a situação do curso." }),
+  graduationYear: z
+    .number({ error: "Informe o ano com 4 dígitos." })
+    .int("Informe o ano com 4 dígitos.")
+    .min(1950, "Informe o ano com 4 dígitos.")
+    .max(2100, "Informe o ano com 4 dígitos.")
+    .nullable(),
+});
+
+export type EducationFormValues = z.infer<typeof educationFormSchema>;
+
+export function parseEducationStatus(value: string | null): EducationStatus | null {
+  return value === "cursando" || value === "concluido" ? value : null;
 }
 
 /** Lê a coluna `languages` com tolerância a formatos inesperados. */

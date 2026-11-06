@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, FileText, FileUp, Loader2, RefreshCw, Sparkles, Trash2 } from "lucide-react";
+import { ExternalLink, FileText, FileUp, Loader2, Pencil, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useId, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -16,11 +16,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDateTime } from "@/lib/format";
 import { jobTypeLabel, type JobType } from "@/lib/options";
 import { cn } from "@/lib/utils";
-import { deleteResume } from "../actions";
-import { LANGUAGE_LEVEL_LABELS } from "../extract";
+import { deleteResume, updateResumeEducation } from "../actions";
+import { COURSE_NAMES, LANGUAGE_LEVEL_LABELS, type EducationStatus } from "../extract";
 import {
   DEMO_RESUME_MESSAGE,
   MAX_RESUME_BYTES,
@@ -50,16 +53,109 @@ function listLabel(items: readonly string[]): string {
 }
 
 function educationLabel(resume: Resume): string | null {
-  if (!resume.course) return null;
+  const course = resume.course ?? "Curso não identificado";
   if (resume.education_status === "cursando") {
     return resume.graduation_year
-      ? `${resume.course}, cursando (formatura prevista para ${resume.graduation_year})`
-      : `${resume.course}, cursando`;
+      ? `${course}, cursando (formatura prevista para ${resume.graduation_year})`
+      : `${course}, cursando`;
   }
   if (resume.education_status === "concluido") {
-    return resume.graduation_year ? `${resume.course}, concluído em ${resume.graduation_year}` : `${resume.course}, concluído`;
+    return resume.graduation_year ? `${course}, concluído em ${resume.graduation_year}` : `${course}, concluído`;
   }
   return resume.course;
+}
+
+const NO_COURSE = "sem-curso";
+
+/** A leitura do PDF pode errar, e a busca depende dela: a pessoa corrige aqui. */
+function EducationEditor({
+  resume,
+  onSaved,
+  onCancel,
+}: {
+  resume: Resume;
+  onSaved: (resume: Resume) => void;
+  onCancel: () => void;
+}) {
+  const uid = useId();
+  const [course, setCourse] = useState(resume.course ?? NO_COURSE);
+  const [status, setStatus] = useState(resume.education_status ?? "");
+  const [year, setYear] = useState(resume.graduation_year?.toString() ?? "");
+  const [saving, startSave] = useTransition();
+
+  function save() {
+    if (!status) {
+      toast.error("Escolha a situação do curso.");
+      return;
+    }
+    startSave(async () => {
+      const result = await updateResumeEducation({
+        course: course === NO_COURSE ? null : course,
+        status: status as EducationStatus,
+        graduationYear: year.trim() ? Number(year) : null,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Formação corrigida", { description: "A próxima busca de vagas já usa essa informação." });
+      onSaved(result.data.resume);
+    });
+  }
+
+  return (
+    <div className="grid gap-3 rounded-lg border p-3">
+      <div className="grid gap-3 sm:grid-cols-[1fr_10rem_8rem]">
+        <div className="grid gap-1.5">
+          <Label htmlFor={`${uid}-course`}>Curso</Label>
+          <Select value={course} onValueChange={setCourse}>
+            <SelectTrigger id={`${uid}-course`} className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="max-h-72">
+              <SelectItem value={NO_COURSE}>Outro curso</SelectItem>
+              {COURSE_NAMES.map((name) => (
+                <SelectItem key={name} value={name}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor={`${uid}-status`}>Situação</Label>
+          <Select value={status} onValueChange={setStatus}>
+            <SelectTrigger id={`${uid}-status`} className="w-full">
+              <SelectValue placeholder="Escolha" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="cursando">Cursando</SelectItem>
+              <SelectItem value="concluido">Concluído</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor={`${uid}-year`}>Ano de formatura</Label>
+          <Input
+            id={`${uid}-year`}
+            inputMode="numeric"
+            maxLength={4}
+            value={year}
+            onChange={(event) => setYear(event.target.value.replace(/\D/g, ""))}
+          />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <Button type="button" size="sm" onClick={save} disabled={saving}>
+          {saving && <Loader2 className="animate-spin" />}
+          Salvar
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={onCancel} disabled={saving}>
+          Cancelar
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -86,6 +182,7 @@ export function ResumeCard({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, startDelete] = useTransition();
   const [chosen, setChosen] = useState<Record<SuggestionKey, boolean>>({ roles: true, jobTypes: true, place: true });
+  const [editingEducation, setEditingEducation] = useState(false);
 
   const busy = uploading || deleting;
 
@@ -288,10 +385,48 @@ export function ResumeCard({
         {isDemo && <p className="text-xs text-muted-foreground">{DEMO_RESUME_MESSAGE} Este é um currículo fictício.</p>}
 
         <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[8rem_1fr] sm:gap-y-3">
-          {education && (
+          {(education || !isDemo) && (
             <>
               <dt className="text-muted-foreground not-first:mt-3 sm:not-first:mt-0">Formação</dt>
-              <dd>{education}</dd>
+              <dd className="space-y-1">
+                {editingEducation ? (
+                  <EducationEditor
+                    resume={resume}
+                    onCancel={() => setEditingEducation(false)}
+                    onSaved={(next) => {
+                      setUploaded(next);
+                      setEditingEducation(false);
+                      setChosen({ roles: true, jobTypes: true, place: true });
+                      router.refresh();
+                    }}
+                  />
+                ) : (
+                  <>
+                    <p className="flex flex-wrap items-center gap-x-2">
+                      {education ?? "Não conseguimos ler do PDF."}
+                      {!isDemo && (
+                        <Button
+                          type="button"
+                          variant="link"
+                          size="sm"
+                          className="h-auto p-0"
+                          onClick={() => setEditingEducation(true)}
+                          disabled={busy}
+                        >
+                          <Pencil /> Corrigir
+                        </Button>
+                      )}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {resume.education_status === "cursando"
+                        ? "Vagas que exigem curso completo, ou outro período de formatura, ficam de fora das sugestões."
+                        : resume.education_status === "concluido"
+                          ? "Vagas que pedem outro período de formatura ficam de fora das sugestões."
+                          : "Informe a situação do curso para a busca conferir o que cada vaga pede de formação."}
+                    </p>
+                  </>
+                )}
+              </dd>
             </>
           )}
           {languages.length > 0 && (

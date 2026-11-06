@@ -5,7 +5,8 @@
  *   Cargo 45 · Tipo de vaga 20 · Local e modelo 20 · Palavras-chave e currículo 15
  *
  * Vagas que claramente não servem (outro tipo, nível sênior, outra cidade,
- * fora do Brasil, palavra a evitar) ficam de fora em vez de ganhar nota baixa.
+ * fora do Brasil, palavra a evitar, formação que o currículo não tem) ficam de
+ * fora em vez de ganhar nota baixa.
  */
 
 import { LANGUAGE_LEVEL_LABELS, levelRank, type ResumeLanguage } from "@/features/resume/extract";
@@ -14,6 +15,7 @@ import { formatCurrency } from "@/lib/format";
 import { jobTypeLabel, workModelLabel, type JobType } from "@/lib/options";
 import { findCities, findUFs, findUFsInTitle, isBrazilLocation } from "./brazil";
 import { detectSeniority, type Seniority } from "./classify";
+import { educationFit } from "./education";
 import { containsTerm, coreTerms, fold } from "./text";
 import type { JobMatch, ScrapedJob, SearchProfile } from "./types";
 
@@ -23,6 +25,8 @@ export const MIN_SCORE = 60;
 const WEIGHTS = { role: 45, type: 20, place: 20, keywords: 15 } as const;
 /** Desconto quando a remuneração informada fica abaixo do mínimo do perfil. */
 const LOW_SALARY_PENALTY = 15;
+/** Desconto quando a vaga lista cursos e o da pessoa não está entre eles. */
+const OTHER_COURSE_PENALTY = 15;
 
 const EARLY_CAREER: readonly JobType[] = ["estagio", "trainee"];
 const LEVEL_LABEL: Record<Exclude<Seniority, null>, string> = {
@@ -167,6 +171,11 @@ export function scoreJob(job: ScrapedJob, profile: SearchProfile, today: string)
 
   // Palavras-chave do perfil e habilidades do currículo ("SQL" também vale "MySQL")
   const haystack = fold(`${title} ${job.text}`);
+
+  // Formação pedida na descrição, comparada com a do currículo
+  const education = educationFit(haystack, job.jobType, profile.resumeEducation, Number(today.slice(0, 4)));
+  if (education.excluded) return excluded(education.excluded);
+
   const foundKeywords = profile.keywords.filter((keyword) => mentionsSkill(haystack, keyword));
   const typed = new Set(profile.keywords.map((keyword) => fold(keyword.trim())));
   const resumeSkills = profile.resumeSkills.filter((skill) => !typed.has(fold(skill)));
@@ -178,7 +187,7 @@ export function scoreJob(job: ScrapedJob, profile: SearchProfile, today: string)
   // Remuneração (só quando a fonte informa)
   const lowSalary =
     job.salaryCents !== null && profile.minSalaryCents !== null && job.salaryCents < profile.minSalaryCents;
-  const penalty = lowSalary ? LOW_SALARY_PENALTY : 0;
+  const penalty = (lowSalary ? LOW_SALARY_PENALTY : 0) + (education.otherCourse ? OTHER_COURSE_PENALTY : 0);
 
   const reasons = [
     role.fraction === 1 ? `Cargo: ${role.role}` : `Cargo parecido: ${role.role}`,
@@ -190,6 +199,7 @@ export function scoreJob(job: ScrapedJob, profile: SearchProfile, today: string)
   const warnings = [
     ...(lowSalary ? [`${formatCurrency(job.salaryCents)}: abaixo do seu mínimo`] : []),
     ...languageWarnings(haystack, profile.resumeLanguages),
+    ...education.warnings,
   ];
 
   const total = WEIGHTS.role + WEIGHTS.type + WEIGHTS.place + (termCount > 0 ? WEIGHTS.keywords : 0);

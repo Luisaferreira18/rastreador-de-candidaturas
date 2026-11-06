@@ -8,7 +8,7 @@ import type { WorkModel } from "@/lib/options";
 import { stateName, toUF } from "../brazil";
 import { gupyJobType, gupyTypesFor } from "../classify";
 import { extractJobDetails } from "../details";
-import { fold, searchTerms, stripHtml } from "../text";
+import { MAX_JOB_TEXT, fold, searchTerms, stripHtml } from "../text";
 import type { ScrapedJob, SearchProfile } from "../types";
 import { SourceError } from "./http";
 
@@ -130,7 +130,7 @@ export function normalizeGupyJob(job: GupyJob): ScrapedJob | null {
     benefits: details.benefits,
     workload: details.workload,
     detailUrl: null,
-    text: text.slice(0, 6000),
+    text: text.slice(0, MAX_JOB_TEXT),
   };
 }
 

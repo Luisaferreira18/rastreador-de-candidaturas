@@ -465,8 +465,8 @@ cargo é comparado sem acentos e com sinônimos em português e inglês ("Dados"
 "Desenvolvedor" = "Developer"). Cada ponto vira um motivo na tela. Ficam de fora, em vez de ganhar
 nota baixa: outro tipo de vaga, nível sênior ou de liderança (quando o cargo do perfil não pede),
 outra cidade em vaga presencial ou híbrida, vaga fora do Brasil, inscrições encerradas, banco de
-talentos, jovem aprendiz e títulos com palavras a evitar. Remuneração abaixo do mínimo vira aviso e
-desconta pontos. Só entram vagas com nota a partir de 60, no máximo 30 novas por busca.
+talentos, jovem aprendiz, títulos com palavras a evitar e formação que o currículo não tem (veja
+[Currículo](#currículo)). Remuneração abaixo do mínimo vira aviso e desconta pontos. Só entram vagas com nota a partir de 60, no máximo 30 novas por busca.
 
 **Bolsa, horário e benefícios** (regras em
 [src/features/job-search/details.ts](src/features/job-search/details.ts)): nenhuma fonte informa
@@ -517,6 +517,26 @@ Nas buscas, as habilidades do currículo **somam com as palavras-chave** do perf
 aparecem como motivo ("Do currículo: Pandas"). Quando a vaga pede inglês ou espanhol avançado e o
 currículo diz menos (ou não cita o idioma), a vaga ganha um aviso ("Inglês avançado: seu currículo
 diz intermediário"). Enviar, trocar ou apagar o currículo libera uma busca nova.
+
+**Formação** (regras em [src/features/job-search/education.ts](src/features/job-search/education.ts)):
+a busca compara o curso, a situação e o ano de formatura com o que a descrição da vaga pede.
+
+| A vaga diz | Para a pessoa | O que acontece |
+| --- | --- | --- |
+| "Ensino superior completo" | Cursando, com formatura depois deste ano | Sai da lista |
+| "Ensino superior completo" | Cursando, com formatura este ano | Fica, com aviso |
+| "Completo ou cursando", "em andamento" | Qualquer uma | Fica |
+| "Superior completo desejável" ou "formação superior em X" | Cursando | Fica, com aviso |
+| "Formatura a partir de 2028", "formação entre 2024 e 2026" | Com ano de formatura fora do período | Sai da lista |
+| Lista fechada de cursos ("cursando Direito") | Curso de outra área | Fica, com aviso e menos 15 pontos |
+| Vaga de estágio | Curso concluído | Fica, com aviso |
+
+As regras foram conferidas contra 527 descrições reais da Gupy. Na dúvida, a vaga fica: só sai o que
+está escrito com clareza. A leitura do PDF pode errar, e por isso o **Perfil de busca** tem um botão
+**Corrigir** na linha da formação. Sem currículo, ou sem a situação do curso, a formação não filtra
+nada. Sugestões antigas sem resposta que a formação descarta são apagadas na busca seguinte, se a
+vaga voltar nos resultados (a descrição não fica guardada, então não dá para reavaliar as outras).
+Ainda não são lidos o semestre pedido ("a partir do 3º semestre") nem os anos de experiência.
 
 **Privacidade:** nome, e-mail, telefone, endereço e documentos não são lidos nem guardados. O PDF
 fica no bucket privado e pode ser apagado a qualquer momento, junto com o que foi lido dele. PDF
@@ -647,7 +667,8 @@ Os testes cobrem as partes que mais importam:
 - **Currículo:** o PDF de exemplo lido de ponta a ponta, habilidades, idiomas, curso e situação,
   cidade, o que não é guardado (nome, e-mail, telefone), a nota com as habilidades, os avisos de
   idioma, e a rota `/api/curriculo` (grava na pasta da pessoa, recusa arquivo que não é PDF e a
-  conta demo).
+  conta demo). A formação comparada com a vaga, com frases reais da Gupy: "completo" e "completo ou
+  cursando", período de formatura, lista de cursos, sugestões antigas apagadas e a correção manual.
 - **Monitoramento:** a máscara de dados pessoais, o que é tirado de cada evento e que nada liga sem o `SENTRY_DSN`.
 - **Automação:** o leitor de mensagens (confirmação da Gupy e do LinkedIn, reprovação, teste,
   entrevistas, case, proposta, aprovação, mensagem colada do WhatsApp, alertas de vagas ignorados,
