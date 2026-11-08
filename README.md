@@ -456,7 +456,16 @@ compatíveis.
 A pessoa pode acrescentar outras empresas colando o link da página de vagas
 (`boards.greenhouse.io/...` ou `jobs.lever.co/...`). A lista pronta fica em
 [src/features/job-search/boards.ts](src/features/job-search/boards.ts). LinkedIn e Indeed ficam de
-fora: não têm listagem pública e proíbem a coleta automática.
+fora da busca: não têm listagem pública e proíbem a coleta automática.
+
+**Alertas do LinkedIn** (regras em
+[src/features/job-search/email-alerts.ts](src/features/job-search/email-alerts.ts)): quem cria alertas
+de vaga no LinkedIn e conecta o Gmail recebe essas vagas nas sugestões. O app lê só o e-mail que chegou
+para a pessoa, sem acessar o site do LinkedIn, e guarda o link sem os parâmetros de rastreamento. O
+e-mail não traz a descrição, então vale o filtro por cargo, tipo e local, mas não por formação nem
+experiência: toda vaga daqui vem com o aviso "Requisitos não conferidos". Só vale o remetente de alertas
+do LinkedIn, e o banco só aceita link de vaga do próprio LinkedIn. A leitura se apoia no link da vaga; se
+o LinkedIn mudar o resto do e-mail, os alertas podem parar de virar sugestões, e o resto do app segue igual.
 
 **Nota de compatibilidade** (regras em [src/features/job-search/score.ts](src/features/job-search/score.ts),
 sem IA): cargo 45 pontos, tipo de vaga 20, local e modelo 20, palavras-chave e habilidades do

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isLinkedinAlert } from "@/features/job-search/email-alerts";
 import { todayISO } from "@/lib/format";
 import { parseMessage } from "./parser";
 
@@ -40,6 +41,8 @@ export type IngestRow = {
 export function buildIngestRows(batch: EmailBatch, now: Date = new Date()): IngestRow[] {
   const rows: IngestRow[] = [];
   for (const email of batch.emails) {
+    // Alerta não fala de uma candidatura: as vagas dele viram sugestões de vaga.
+    if (isLinkedinAlert(email.from)) continue;
     const date = email.date ? new Date(email.date) : now;
     const receivedAt = Number.isNaN(date.getTime()) ? now : date;
     const parsed = parseMessage({

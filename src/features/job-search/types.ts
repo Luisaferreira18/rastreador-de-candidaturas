@@ -2,13 +2,14 @@ import type { EducationStatus, ResumeLanguage } from "@/features/resume/extract"
 import type { JobType, WorkModel } from "@/lib/options";
 
 /** De onde a vaga veio. */
-export type JobSource = "gupy" | "greenhouse" | "lever";
+export type JobSource = "gupy" | "greenhouse" | "lever" | "linkedin";
 export type LeadStatus = "nova" | "adicionada" | "descartada";
 
 export const SOURCE_LABELS: Record<JobSource, string> = {
   gupy: "Gupy",
   greenhouse: "Greenhouse",
   lever: "Lever",
+  linkedin: "Alerta do LinkedIn",
 };
 
 /** Página de vagas de uma empresa no Greenhouse ou no Lever. */

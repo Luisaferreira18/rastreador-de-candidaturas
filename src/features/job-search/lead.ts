@@ -28,7 +28,7 @@ export function leadToApplication(
     role_title: lead.title.slice(0, 160),
     job_type: lead.job_type ?? profileJobTypes[0] ?? "clt",
     job_url: lead.url,
-    platform: lead.source === "gupy" ? "gupy" : "site_empresa",
+    platform: lead.source === "gupy" || lead.source === "linkedin" ? lead.source : "site_empresa",
     location: lead.location?.slice(0, 120) ?? null,
     work_model: lead.work_model ?? "presencial",
     salary_cents: lead.salary_cents,

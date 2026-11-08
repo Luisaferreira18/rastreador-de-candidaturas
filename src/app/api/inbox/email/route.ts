@@ -1,7 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { buildIngestRows, emailBatchSchema } from "@/features/inbox/ingest";
+import { InvalidTokenError, alertJobs, ingestJobAlerts, type JobAlertClient } from "@/features/job-search/email-alerts";
 import { getSupabasePublicEnv } from "@/lib/env";
+import { todayISO } from "@/lib/format";
 import type { Database } from "@/types/database";
 
 /**
@@ -28,22 +30,39 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Formato inválido: envie { emails: [...] } com até 50 mensagens." }, { status: 400 });
   }
 
+  const emails = batch.data.emails;
+  const jobs = alertJobs(emails);
   const rows = buildIngestRows(batch.data);
-  if (rows.length === 0) {
-    return NextResponse.json({ recebidos: batch.data.emails.length, relevantes: 0, gravados: 0 });
+  if (rows.length === 0 && jobs.length === 0) {
+    return NextResponse.json({ recebidos: emails.length, relevantes: 0, gravados: 0 });
   }
 
   const { url, publishableKey } = getSupabasePublicEnv();
   const supabase = createClient<Database>(url, publishableKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const { data, error } = await supabase.rpc("inbox_ingest", { p_token: token, p_items: rows });
+  const invalidToken = () => NextResponse.json({ error: "Token inválido. Gere um novo no app." }, { status: 401 });
 
-  if (error) {
-    if (error.code === "28000") return NextResponse.json({ error: "Token inválido. Gere um novo no app." }, { status: 401 });
-    console.error("[inbox/email]", error);
-    return NextResponse.json({ error: "Não foi possível gravar as mensagens." }, { status: 500 });
+  let saved = 0;
+  if (rows.length > 0) {
+    const { data, error } = await supabase.rpc("inbox_ingest", { p_token: token, p_items: rows });
+    if (error) {
+      if (error.code === "28000") return invalidToken();
+      console.error("[inbox/email]", error);
+      return NextResponse.json({ error: "Não foi possível gravar as mensagens." }, { status: 500 });
+    }
+    saved = data ?? 0;
   }
 
-  return NextResponse.json({ recebidos: batch.data.emails.length, relevantes: rows.length, gravados: data ?? 0 });
+  const result = { recebidos: emails.length, relevantes: rows.length, gravados: saved };
+  if (jobs.length === 0) return NextResponse.json(result);
+
+  try {
+    const vagas = await ingestJobAlerts(supabase as unknown as JobAlertClient, token, jobs, todayISO());
+    return NextResponse.json({ ...result, vagas });
+  } catch (error) {
+    if (error instanceof InvalidTokenError) return invalidToken();
+    console.error("[inbox/email] alertas", error);
+    return NextResponse.json({ ...result, vagas: 0 });
+  }
 }

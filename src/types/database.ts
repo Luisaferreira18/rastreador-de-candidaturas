@@ -563,6 +563,14 @@ export type Database = {
         Args: { p_token: string; p_items: Json };
         Returns: number;
       };
+      job_alert_context: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
+      job_alert_ingest: {
+        Args: { p_token: string; p_leads: Json };
+        Returns: number;
+      };
       report_snapshot: {
         Args: { p_token: string };
         Returns: Json;
