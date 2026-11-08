@@ -132,10 +132,27 @@ const NOISE = [
   /confira (as|estas|essas|novas) vagas/,
   /newsletter|webinar/,
   /(quem viu|visualizou) seu perfil|seu perfil (foi visto|apareceu)/,
+  /vagas? do dia/,
 ];
 
+/**
+ * Remetentes que nunca falam de uma candidatura: convites e avisos de rede,
+ * marketing e sugestões de vaga. Recrutadores do LinkedIn (InMail) e os avisos
+ * de candidatura (jobs-noreply) continuam valendo.
+ */
+const NOISE_SENDERS = [
+  /^(invitations|notifications-noreply|editors-noreply|groups-noreply|news|learning)@linkedin\.com$/,
+  /@(e|em|el|mail)\.linkedin\.com$/,
+  /^(sugestaovagas|avisovagas|alertavagas|vagasdodia)@/,
+  /^(newsletter|news|marketing|promocoes|ofertas)@/,
+];
+
+export function isNoiseSender(sender: Sender): boolean {
+  return sender.email !== null && NOISE_SENDERS.some((pattern) => pattern.test(sender.email!));
+}
+
 const PROCESS_WORDS =
-  /processo seletivo|candidatura|recrutamento|recrutador|recrutadora|selecao|inscricao|vaga de|sua vaga|etapa/;
+  /processo seletivo|candidatura|recrutamento|recrutador|recrutadora|processo de selecao|inscricao|vaga de|sua vaga|etapa/;
 
 function firstIndex(text: string, patterns: RegExp[]): number {
   let best = -1;
@@ -352,6 +369,8 @@ export function extractRole(subject: string, body: string): string | null {
     if (!raw) continue;
     const role = raw
       .replace(/^(a|o)\s+/i, "")
+      // Código da vaga: "12778250 - Cientista de Dados".
+      .replace(/^\d{4,}\s*[-–|:]\s*/, "")
       .replace(/\s+e\s+(gostar|quer|inform|agradec|convid|pedimos|vamos|estamos|temos).*$/i, "")
       .replace(/[\s,–-]+$/, "");
     if (role.length >= 3 && role.length <= 80 && !/\b(processo|candidatura|etapa|seletivo)\b/i.test(normalize(role))) {
@@ -457,14 +476,17 @@ export function parseMessage(message: IncomingMessage): ParsedMessage {
 
   const dueDate = KINDS_WITH_DATES.has(kind) ? extractDueDate(`${subject}\n${body}`, message.receivedOn) : null;
   const taskTitle = dueDate ? (TASK_WITH_DATE[kind] ?? KIND_INFO[kind].task) : KIND_INFO[kind].task;
+  const roleTitle = extractRole(subject, body);
+  const company = extractCompany(subject, body, sender);
 
   return {
-    relevant,
+    relevant: relevant && !isNoiseSender(sender),
     kind,
     stage: KIND_INFO[kind].stage,
     confidence,
-    company: extractCompany(subject, body, sender),
-    roleTitle: extractRole(subject, body),
+    // "Candidatura para 123 - Cientista de Dados": o pedaço do assunto é o cargo, não a empresa.
+    company: company && roleTitle && normalize(company) === normalize(roleTitle) ? null : company,
+    roleTitle,
     platform: detectPlatform(sender),
     taskTitle,
     dueDate,

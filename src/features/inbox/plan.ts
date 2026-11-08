@@ -72,24 +72,43 @@ export function companyKey(name: string): string {
   return normalize(name).replace(/\./g, "").replace(LEGAL_SUFFIXES, "").replace(/[^a-z0-9]/g, "");
 }
 
+/** "12778250 - Cientista de Dados | ML" → "cientista de dados | ml" (sem o código da vaga). */
+function roleKey(roleTitle: string): string {
+  return normalize(roleTitle).replace(/^\d{4,}\s*[-–|:]\s*/, "").trim();
+}
+
+/**
+ * Sem empresa reconhecida (plataformas como a DigAI escrevem em nome da vaga),
+ * vale o cargo: só se uma única candidatura em andamento tiver esse cargo.
+ */
+function matchByRole(roleTitle: string | null, applications: readonly PlanApplication[]): PlanApplication | null {
+  const role = roleTitle ? roleKey(roleTitle) : "";
+  if (role.length < 8) return null;
+  const candidates = applications.filter((application) => {
+    if (getStage(application.stage).kind === "final") return false;
+    const other = roleKey(application.role_title);
+    return other.length >= 8 && (other.includes(role) || role.includes(other));
+  });
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
 /** Acha a candidatura da mensagem pelo nome da empresa (e, se houver empate, pelo cargo). */
 export function matchApplication(
   company: string | null,
   roleTitle: string | null,
   applications: readonly PlanApplication[],
 ): PlanApplication | null {
-  if (!company) return null;
-  const key = companyKey(company);
-  if (key.length < 3) return null;
+  const key = company ? companyKey(company) : "";
+  if (key.length < 3) return matchByRole(roleTitle, applications);
 
   const candidates = applications.filter((application) => {
     const other = companyKey(application.company);
     if (other === key) return true;
     return Math.min(other.length, key.length) >= 4 && (other.includes(key) || key.includes(other));
   });
-  if (candidates.length === 0) return null;
+  if (candidates.length === 0) return matchByRole(roleTitle, applications);
 
-  const role = roleTitle ? normalize(roleTitle) : null;
+  const role = roleTitle ? roleKey(roleTitle) : null;
   const score = (application: PlanApplication) =>
     (companyKey(application.company) === key ? 4 : 0) +
     (getStage(application.stage).kind !== "final" ? 2 : 0) +

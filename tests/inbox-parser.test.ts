@@ -204,6 +204,57 @@ describe("leitura de mensagens de processos seletivos", () => {
     ).toBe(false);
   });
 
+  it("ignora convites de rede, marketing e sugestões de vaga, mesmo com palavras de processo", () => {
+    const noise = [
+      {
+        from: "Gabriel via LinkedIn <invitations@linkedin.com>",
+        subject: "Você recebeu um convite",
+        body: "Gabriel, Estagiário de TI da Zenet aguarda sua resposta. Olá, Luisa. Eu gostaria de fazer parte da sua rede profissional. Recrutador.",
+      },
+      {
+        from: "LinkedIn <linkedin@em.linkedin.com>",
+        subject: "Luisa, agradecemos sua participação no LinkedIn",
+        body: "Aproveite sua demonstração gratuita. Prepare-se para a entrevista com o Premium.",
+      },
+      {
+        from: "Catho <sugestaovagas@catho.com.br>",
+        subject: "Luisa, chegou a sua vaga do dia (03/11) para Estágio de TI",
+        body: "Oportunidade de emprego na sua região. Candidate-se à vaga de Estágio de TI.",
+      },
+      {
+        from: "Catho <avisovagas@catho.com.br>",
+        subject: "Seu próximo desafio profissional como TI chegou",
+        body: "Empresas contratando na sua região. Ver todos os resultados deste aviso.",
+      },
+      {
+        from: "Ticketmaster <contato@email.ticketmaster.com.br>",
+        subject: "Uma seleção especial para quem ama viver grandes momentos",
+        body: "Shows e eventos perto de você.",
+      },
+    ];
+    for (const message of noise) expect(parseMessage({ ...message, receivedOn: ON }).relevant, message.subject).toBe(false);
+  });
+
+  it("e-mail da DigAI: o código e o cargo da vaga não viram empresa", () => {
+    const parsed = parseMessage({
+      from: '"DigAI" <noreply@mailer.digai.ai>',
+      subject: "Falta um passo na sua candidatura para 12778250 - Cientista de Dados | Machine Learning, NLP & IA Generativa",
+      body: "Oi Luísa, sua candidatura está quase completa. A ENTREVISTA PARA 12778250 - Cientista de Dados | Machine Learning, NLP & IA Generativa Stefanini - 1 - Candidatura: feita 2 - Entrevista: você está aqui",
+      receivedOn: ON,
+    });
+    expect(parsed).toMatchObject({ relevant: true, kind: "entrevista_rh", roleTitle: "Cientista de Dados", company: null });
+  });
+
+  it("recrutador escrevendo pelo LinkedIn continua valendo", () => {
+    const parsed = parseMessage({
+      from: "Marina Souza via LinkedIn <messages-noreply@linkedin.com>",
+      subject: "Vamos marcar uma entrevista?",
+      body: "Oi, Luisa! Gostaria de agendar uma entrevista para a vaga de Estágio em Dados.",
+      receivedOn: ON,
+    });
+    expect(parsed).toMatchObject({ relevant: true, kind: "entrevista_rh" });
+  });
+
   it("mensagem sobre a vaga sem etapa clara vira 'outro' para você decidir", () => {
     const parsed = parseMessage({
       subject: "Sobre sua candidatura",

@@ -38,6 +38,20 @@ describe("encontrar a candidatura da mensagem", () => {
     expect(matchApplication(null, null, apps)).toBeNull();
     expect(matchApplication("TI", null, apps)).toBeNull();
   });
+
+  it("sem empresa reconhecida, acha pelo cargo se só uma vaga em andamento tem esse cargo", () => {
+    const withStefanini: PlanApplication[] = [
+      ...apps,
+      { id: "a5", company: "Stefanini Group", role_title: "Cientista de Dados | Machine Learning, NLP & IA Generativa", stage: "teste_online", applied_at: "2026-11-06", updated_at: "2026-11-06T00:00:00Z" },
+    ];
+    expect(matchApplication(null, "Cientista de Dados", withStefanini)?.id).toBe("a5");
+    expect(matchApplication("Cientista de Dados", "12778250 - Cientista de Dados", withStefanini)?.id).toBe("a5");
+    // Cargo curto, de vaga encerrada ou repetido em duas vagas: não arrisca.
+    expect(matchApplication(null, "Dados", withStefanini)).toBeNull();
+    expect(matchApplication(null, "Estágio em TI", withStefanini)).toBeNull();
+    const twice = [...withStefanini, { ...withStefanini[4], id: "a6", company: "Outra" }];
+    expect(matchApplication(null, "Cientista de Dados", twice)).toBeNull();
+  });
 });
 
 describe("decidir a nova etapa", () => {
