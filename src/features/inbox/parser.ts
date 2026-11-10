@@ -115,6 +115,7 @@ const MIDDLE_RULES: Rule[] = [
       /testes? (online|on-line|de (logica|ingles|perfil|raciocinio|conhecimentos?|personalidade)|comportamenta)/,
       /avaliacao (online|on-line|de (perfil|ingles|logica|conhecimentos?))/,
       /etapa de testes?/,
+      /testes?(\(s\))?\W{0,3} pendentes?/,
       /questionario/,
       /assessment/,
     ],
@@ -357,6 +358,8 @@ export function extractCompany(subject: string, body: string, sender: Sender): s
 }
 
 const ROLE_PATTERNS: RegExp[] = [
+  // Gupy: "Nova mensagem referente à vaga Analista de Dados Jr - Remoto:".
+  /referente (?:à|a) vaga (?:de )?([^\n:]{3,80}?):?\s*$/im,
   /\bvaga (?:de |para )(?:a |o )?([^\n.!|;:()]{3,80}?)(?= (?:na|no|da empresa|em nossa|em nosso|foi|está|esta)\b|[.!|;:\n]|$)/i,
   /(?:candidatura|inscrição|inscricao|aplicação|aplicacao) (?:para|à|a|na) (?:vaga (?:de )?)?([^\n.!|;:()]{3,80}?)(?= (?:na|no|da empresa|foi|em nossa)\b|[.!|;:\n]|$)/i,
   /posição de ([^\n.!|;:()]{3,80}?)(?= (?:na|no)\b|[.!|;:\n]|$)/i,

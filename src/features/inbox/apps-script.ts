@@ -8,7 +8,7 @@
 
 /** Busca do Gmail: plataformas de recrutamento ou assuntos típicos de processos. */
 export const GMAIL_QUERY =
-  "(from:(gupy.io OR linkedin.com OR kenoby.com OR solides.com.br OR inhire.com.br OR pandape OR vagas.com.br " +
+  "(from:(gupy.io OR gupy.com.br OR digai.ai OR linkedin.com OR kenoby.com OR solides.com.br OR inhire.com.br OR pandape OR vagas.com.br " +
   "OR indeed.com OR infojobs OR catho OR 99jobs OR ciee OR nube OR recrutei OR abler OR greenhouse.io OR lever.co " +
   "OR myworkday OR smartrecruiters OR teamtailor) OR subject:(candidatura OR \"processo seletivo\" OR entrevista " +
   "OR \"teste online\" OR inscrição OR vaga OR proposta OR recrutamento OR seleção))";

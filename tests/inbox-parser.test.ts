@@ -245,6 +245,28 @@ describe("leitura de mensagens de processos seletivos", () => {
     expect(parsed).toMatchObject({ relevant: true, kind: "entrevista_rh", roleTitle: "Cientista de Dados", company: null });
   });
 
+  it("Gupy: o cargo vem de 'referente à vaga' e teste pendente é etapa de teste", () => {
+    const gupy = (company: string, subject: string, role: string, text: string) =>
+      parseMessage({
+        from: `${company} <no-reply@gupy.com.br>`,
+        subject,
+        body: `| | # ${company} ## 12848395 - ${role} |
+
+Nova mensagem referente à vaga ${role}:
+
+Olá, Luísa!
+
+${text}`,
+        receivedOn: ON,
+      });
+    expect(
+      gupy("Bancorbrás", "Luísa, você tem pendências na plataforma!", "ANALISTA DE DADOS JUNIOR", "Identificamos que você possui* teste(s) pendente(s)* no processo seletivo da vaga ANALISTA DE DADOS JUNIOR."),
+    ).toMatchObject({ relevant: true, kind: "teste", company: "Bancorbrás", roleTitle: "ANALISTA DE DADOS JUNIOR" });
+    expect(
+      gupy("Lanlink", "Luísa, você foi aprovado nos testes online!", "Analista de Banco de Dados Jr - Remoto", "Parabéns! Você foi aprovado nos testes online para a vaga Analista de Banco de Dados Jr - Remoto!"),
+    ).toMatchObject({ relevant: true, kind: "teste", company: "Lanlink", roleTitle: "Analista de Banco de Dados Jr - Remoto" });
+  });
+
   it("recrutador escrevendo pelo LinkedIn continua valendo", () => {
     const parsed = parseMessage({
       from: "Marina Souza via LinkedIn <messages-noreply@linkedin.com>",
